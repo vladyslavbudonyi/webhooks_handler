@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     API_TENANT: str = ""
     API_INSTANCE: str = ""
     API_CLIENT: str = ""
-    API_SECRET: str = ""
+    API_SECRET: SecretStr = SecretStr("")
 
 
 __all__ = ["settings"]

@@ -11,4 +11,4 @@ RUN uv sync
 
 COPY app ./app
 
-CMD ["./.venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0" , "--port", "8090"]
+CMD ["./.venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0" , "--port", "8099"]

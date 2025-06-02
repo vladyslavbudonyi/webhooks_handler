@@ -21,7 +21,7 @@ class TokenService:
     async def _fetch_token(self) -> str:
         url = f"{self._settings.API_URL}/{self._settings.API_TENANT}/admin/api_clients/{self._settings.API_CLIENT}"
         headers = {"Content-Type": "application/json"}
-        body = {"secret": self._settings.API_SECRET}
+        body = {"secret": self._settings.API_SECRET.get_secret_value()}
 
         resp = await self._client.post(url, json=body, headers=headers, timeout=10.0)
         try:
