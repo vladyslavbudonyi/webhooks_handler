@@ -7,12 +7,6 @@ from app.config import settings
 
 
 class TokenService:
-    """
-    Responsible for fetching & caching a Bearer token from:
-      {API_URL}/{API_TENANT}/admin/api_clients/{API_CLIENT}
-    using JSON payload {"secret": API_SECRET}.
-    """
-
     def __init__(self, http_client: httpx.AsyncClient):
         self._client = http_client
         self._settings = settings
@@ -43,10 +37,6 @@ class TokenService:
         return f"Bearer {token_value}"
 
     async def get_token(self, force_refresh: bool = False) -> str:
-        """
-        Returns a cached token if present; otherwise fetches a fresh one.
-        If force_refresh=True, always re‐fetch.
-        """
         if not self._cached_token or force_refresh:
             self._cached_token = await self._fetch_token()
         return self._cached_token

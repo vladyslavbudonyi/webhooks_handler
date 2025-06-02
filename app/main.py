@@ -1,33 +1,20 @@
 from datetime import timedelta, datetime, timezone
 
-import httpx
 from fastapi import FastAPI, HTTPException, Request, status, Depends, Body
 from app.config import settings
 from app.models import WebhookPayload
+from app.services import api_service_client
 from app.services.api_service import ApiService
-from app.services.token_service import TokenService
 from app.utils import parse_url_components, calculate_total_days, get_cdt_value, build_description, iso_midnight_utc
 
 app = FastAPI()
-
-
-async def get_http_client():
-    async with httpx.AsyncClient() as client:
-        yield client
-
-
-async def get_api_service(
-    client: httpx.AsyncClient = Depends(get_http_client),
-) -> ApiService:
-    token_service = TokenService(client)
-    return ApiService(client, token_service)
 
 
 @app.post("/webhook")
 async def receive_webhook(
     request: Request,
     payload: WebhookPayload = Body(...),
-    client: ApiService = Depends(get_api_service),
+    client: ApiService = Depends(api_service_client),
 ):
     try:
         body = await request.json()
