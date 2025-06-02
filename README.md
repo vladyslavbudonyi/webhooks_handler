@@ -1,2 +1,2 @@
-# interview_slots
-Simple project to manage interview schedule
+# WH handler
+Simple project to manage webhooks
