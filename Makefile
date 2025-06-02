@@ -86,12 +86,12 @@ endif
 #  = = =   TARGETS   = = = >
 ##
 ## ---> docker deployment <---------------------------------------------------------------------------
-## run-lsap             : start lsa perf containers
+## run-wh               : start wh containers
 run-wh: check-dependencies-for-run
 	cd $(CUR_PATH) &&\
  	$(USE_DOCKER_COMPOSE) -f docker-compose.yaml up -d --build
 
-## stop-lsap            : stop lsa perf containers
+## stop-wh              : stop wh containers
 stop-wh:
 	cd $(CUR_PATH) &&\
  	$(USE_DOCKER_COMPOSE) -f docker-compose.yaml down
