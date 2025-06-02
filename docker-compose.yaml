@@ -1,0 +1,8 @@
+version: "3.8"
+services:
+  welkin-wh:
+    build: .
+    container_name: welkin-wh
+    restart: unless-stopped
+    ports:
+      - "8099:8099"
