@@ -6,19 +6,22 @@ from app.config import settings
 from app.models import WebhookPayload
 from app.services.api_service import ApiService
 from app.services.token_service import TokenService
-from app.utils.utils import parse_url_components
+from app.utils import parse_url_components, calculate_total_days, get_cdt_value, build_description, iso_midnight_utc
 
 app = FastAPI()
+
 
 async def get_http_client():
     async with httpx.AsyncClient() as client:
         yield client
+
 
 async def get_api_service(
     client: httpx.AsyncClient = Depends(get_http_client),
 ) -> ApiService:
     token_service = TokenService(client)
     return ApiService(client, token_service)
+
 
 @app.post("/webhook")
 async def receive_webhook(
@@ -56,42 +59,18 @@ async def receive_webhook(
         raise http_exc
     upstream_data = upstream_resp.json()
     json_body = upstream_data.get("jsonBody", {})
-    dosage_per_unit = json_body.get("cdtf-dosage-per-unit")
-    medication_name = json_body.get("cdtf-medication-name")
-    times_per_unit = json_body.get("cdtf-times-per-unit")
-    duration = json_body.get("cdtf-duration")
-    duration_unit = json_body.get("cdtf-duration-unit")
+
+    dosage_per_unit = get_cdt_value(json_body, "cdtf-dosage-per-unit")
+    medication_name = get_cdt_value(json_body, "cdtf-medication-name")
+    times_per_unit = get_cdt_value(json_body, "cdtf-times-per-unit")
+    duration = get_cdt_value(json_body, "cdtf-duration")
+    duration_unit = get_cdt_value(json_body, "cdtf-duration-unit")
     if duration is None or duration_unit is None:
         duration = 1
         duration_unit = "Days"
-    try:
-        duration_int = int(duration)
-    except (TypeError, ValueError):
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Invalid duration value: {duration}"
-        )
-    unit_lower = duration_unit.strip().lower()
-    if unit_lower in ("day", "days"):
-        total_days = duration_int
-    elif unit_lower in ("month", "months"):
-        total_days = duration_int * 30
-    else:
-        total_days = 1
-    if total_days < 1:
-        total_days = 1
-    if all([dosage_per_unit, medication_name, times_per_unit]):
-        description = (
-            f"Take {times_per_unit}× {medication_name} "
-            f"({dosage_per_unit}) {times_per_unit} times per day for {duration_int} {duration_unit.lower()}"
-        )
-    else:
-        description = f"{medication_name or 'Medication'} – {duration_int} {duration_unit.lower()}"
-    def iso_midnight_utc(dt: datetime) -> str:
-        return (
-            dt.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=timezone.utc)
-            .strftime("%Y-%m-%dT%H:%M:%S.000Z")
-        )
+    total_days, duration_int = calculate_total_days(duration, duration_unit)
+    description = build_description(dosage_per_unit, medication_name, times_per_unit, duration_int, duration_unit)
+
     today_utc = datetime.now(timezone.utc)
     patient_id = payload.patientId
     initiated_by = payload.initiatedBy
