@@ -24,6 +24,7 @@ class TokenService:
         body = {"secret": self._settings.API_SECRET.get_secret_value()}
 
         resp = await self._client.post(url, json=body, headers=headers, timeout=10.0)
+        print(resp.json())
         try:
             resp.raise_for_status()
         except httpx.HTTPStatusError as exc:
