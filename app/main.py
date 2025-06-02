@@ -28,6 +28,7 @@ async def receive_webhook(
 ):
     try:
         body = await request.json()
+        print(body)
     except Exception:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid JSON payload")
     try:
@@ -99,7 +100,7 @@ async def receive_webhook(
     for i in range(total_days):
         due_date_iso = iso_midnight_utc(today_utc + timedelta(days=i))
         task_payload = {
-            "name": "Medication Task",
+            "name": description,
             "description": description,
             "assignee": {"id": initiated_by},
             "dueDate": due_date_iso,
