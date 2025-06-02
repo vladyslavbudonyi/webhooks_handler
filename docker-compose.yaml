@@ -5,4 +5,4 @@ services:
     container_name: welkin-wh
     restart: unless-stopped
     ports:
-      - "8099:8099"
+      - "8090:8090"
