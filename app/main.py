@@ -102,6 +102,7 @@ async def receive_webhook(
             "cdtf-med-sign": False,
             "cdtf-action-taken": "To be given",
         }
+        print(f"Medispan: {payload_tracker}")
         try:
             resp = await client.post_cdt(patient_id, payload_tracker, "cdt-emar-med-tracker")
             resp.raise_for_status()
