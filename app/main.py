@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request, status, Depends, Body
@@ -6,7 +7,7 @@ from app.config import settings
 from app.models import WebhookPayload
 from app.services import api_service_client
 from app.services.api_service import ApiService
-from app.utils import parse_url_components, calculate_total_days, get_cdt_value, build_description, iso_midnight_utc
+from app.utils import parse_url_components
 
 app = FastAPI()
 
@@ -19,7 +20,6 @@ async def receive_webhook(
 ):
     try:
         body = await request.json()
-        print(body)
     except Exception:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid JSON payload")
     try:
@@ -65,7 +65,8 @@ async def receive_webhook(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Invalid med-start-date format: {med_start_iso}",
         )
-    med_date = med_start_dt.date()
+    local_tz = ZoneInfo("Europe/Warsaw")
+    med_start_local = med_start_dt.astimezone(local_tz).date()
     patient_id = payload.patientId
     created_entries = []
     errors = []
@@ -75,10 +76,19 @@ async def receive_webhook(
         except Exception:
             errors.append({"time": entry, "error": "Invalid time format"})
             continue
-        combined = datetime(med_date.year, med_date.month, med_date.day, time_obj.hour, time_obj.minute,
-                            tzinfo=timezone.utc)
-        target_iso = combined.strftime("%Y-%m-%dT%H:%M:%S.000Z")
-        give_midnight = datetime(med_date.year, med_date.month, med_date.day, 0, 0, tzinfo=timezone.utc)
+        local_dt = datetime(
+            med_start_local.year,
+            med_start_local.month,
+            med_start_local.day,
+            time_obj.hour,
+            time_obj.minute,
+            tzinfo=local_tz,
+        )
+        target_utc = local_dt.astimezone(timezone.utc)
+        target_iso = target_utc.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        give_midnight = datetime(
+            med_start_local.year, med_start_local.month, med_start_local.day, 0, 0, tzinfo=local_tz
+        ).astimezone(timezone.utc)
         give_iso = give_midnight.strftime("%Y-%m-%dT%H:%M:%S.000Z")
         payload_tracker = {
             "cdtf-quantity": quantity,
