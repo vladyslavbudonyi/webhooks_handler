@@ -52,6 +52,9 @@ async def receive_webhook(
     med_start_iso = json_body.get("cdtf-med-start-date")
     time_list = json_body.get("cdtf-med--time-of-administration-list") or []
     medispan = json_body.get("cdtf-")
+    medispan["pdtf-mf2-name_strength"] = None
+    medispan["pdtf-mf2-name_drug-name"] = None
+    medispan["pdtf-mf2-name_route-of-administration"] = None
     internal_note = json_body.get("cdtf-internal-note")
     if not med_start_iso or not medispan:
         raise HTTPException(
