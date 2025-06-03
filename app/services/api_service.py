@@ -60,3 +60,20 @@ class ApiService:
                 detail=f"Creating task failed: {exc.response.status_code} - {exc.response.text}",
             )
         return resp
+
+    async def post_cdt(self, patient_id: str, cdt_body: dict, cdt_name: str) -> httpx.Response:
+        url = f"{settings.API_URL}/{settings.API_TENANT}/{settings.API_INSTANCE}/patients/{patient_id}/cdts/{cdt_name}"
+        token = await self._token_service.get_token()
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": token,
+        }
+        resp = await self._client.post(url, json=cdt_body, headers=headers, timeout=10.0)
+        try:
+            resp.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Creating task failed: {exc.response.status_code} - {exc.response.text}",
+            )
+        return resp

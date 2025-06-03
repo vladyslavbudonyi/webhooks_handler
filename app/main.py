@@ -1,5 +1,6 @@
-from datetime import timedelta, datetime, timezone
+from datetime import datetime, timezone
 
+import httpx
 from fastapi import FastAPI, HTTPException, Request, status, Depends, Body
 from app.config import settings
 from app.models import WebhookPayload
@@ -45,45 +46,59 @@ async def receive_webhook(
     except HTTPException as http_exc:
         raise http_exc
     upstream_data = upstream_resp.json()
+    print(upstream_data)
     json_body = upstream_data.get("jsonBody", {})
-
-    dosage_per_unit = get_cdt_value(json_body, "cdtf-dosage-per-unit")
-    medication_name = get_cdt_value(json_body, "cdtf-medication-name")
-    times_per_unit = get_cdt_value(json_body, "cdtf-times-per-unit")
-    duration = get_cdt_value(json_body, "cdtf-duration")
-    duration_unit = get_cdt_value(json_body, "cdtf-duration-unit")
-    if duration is None or duration_unit is None:
-        duration = 1
-        duration_unit = "Days"
-    total_days, duration_int = calculate_total_days(duration, duration_unit)
-    description = build_description(dosage_per_unit, medication_name, times_per_unit, duration_int, duration_unit)
-
-    today_utc = datetime.now(timezone.utc)
+    quantity = json_body.get("cdtf-med-quantity")
+    med_start_iso = json_body.get("cdtf-med-start-date")
+    time_list = json_body.get("cdtf-med--time-of-administration-list") or []
+    medispan = json_body.get("cdtf-")
+    internal_note = json_body.get("cdtf-internal-note")
+    if not med_start_iso or not medispan:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Missing required cdtf-med-start-date or cdtf-medispan",
+        )
+    try:
+        med_start_dt = datetime.fromisoformat(med_start_iso.replace("Z", "+00:00"))
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid med-start-date format: {med_start_iso}",
+        )
+    med_date = med_start_dt.date()
     patient_id = payload.patientId
-    initiated_by = payload.initiatedBy
-    created_tasks = []
+    created_entries = []
     errors = []
-    for i in range(total_days):
-        due_date_iso = iso_midnight_utc(today_utc + timedelta(days=i))
-        task_payload = {
-            "name": description,
-            "description": description,
-            "assignee": {"id": initiated_by},
-            "dueDate": due_date_iso,
-            "priority": "HIGH",
-            "watchersType": "POINT_OF_CONTACT",
-            "templateName": "ttmp-task-template",
-            "patient": {"id": patient_id},
-            "status": "TODO",
+    for entry in time_list:
+        try:
+            time_obj = datetime.strptime(entry, "%I:%M %p").time()
+        except Exception:
+            errors.append({"time": entry, "error": "Invalid time format"})
+            continue
+        combined = datetime(med_date.year, med_date.month, med_date.day, time_obj.hour, time_obj.minute,
+                            tzinfo=timezone.utc)
+        target_iso = combined.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        give_midnight = datetime(med_date.year, med_date.month, med_date.day, 0, 0, tzinfo=timezone.utc)
+        give_iso = give_midnight.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        payload_tracker = {
+            "cdtf-quantity": quantity,
+            "cdtf-medispan": medispan,
+            "cdtf-target-time": target_iso,
+            "cdtf-give-date": give_iso,
+            "cdtf-internal-note": internal_note,
+            "cdtf-med-sign": False,
+            "cdtf-action-taken": "To be given",
         }
         try:
-            resp = await client.post_tasks(task_payload)
-            created_tasks.append({"day_index": i, "dueDate": due_date_iso, "status": resp.status_code})
-        except HTTPException as exc:
-            errors.append({"day_index": i, "dueDate": due_date_iso, "error": exc.detail})
+            resp = await client.post_cdt(patient_id, payload_tracker, "cdt-emar-med-tracker")
+            resp.raise_for_status()
+            created_entries.append({"time": entry, "status": resp.status_code})
+        except httpx.HTTPStatusError as exc:
+            errors.append({"time": entry, "error": f"{exc.response.status_code} - {exc.response.text}"})
+        except Exception as exc:
+            errors.append({"time": entry, "error": str(exc)})
     return {
         "status": "ok",
-        "message": f"Attempted to create {total_days} task(s).",
-        "tasks_created": created_tasks,
+        "entries_created": created_entries,
         "errors": errors,
     }
