@@ -54,7 +54,6 @@ async def receive_webhook(
     medispan = json_body.get("cdtf-")
     medispan["pdtf-mf2-name_strength"] = None
     medispan["pdtf-mf2-name_drug-name"] = None
-    medispan["pdtf-mf2-name_route-of-administration"] = None
     internal_note = json_body.get("cdtf-internal-note")
     if not med_start_iso or not medispan:
         raise HTTPException(
@@ -102,7 +101,7 @@ async def receive_webhook(
             "cdtf-med-sign": False,
             "cdtf-action-taken": "To be given",
         }
-        print(f"Medispan: {payload_tracker}")
+        print(f"CDT payload: {payload_tracker}")
         try:
             resp = await client.post_cdt(patient_id, payload_tracker, "cdt-emar-med-tracker")
             resp.raise_for_status()
