@@ -47,16 +47,20 @@ async def receive_webhook(
         raise http_exc
     upstream_data = upstream_resp.json()
     print(upstream_data)
+
+    cdt_name = upstream_data.get("cdtName")
     json_body = upstream_data.get("jsonBody", {})
     quantity = json_body.get("cdtf-med-quantity")
     med_start_iso = json_body.get("cdtf-med-start-date")
     time_list = json_body.get("cdtf-med--time-of-administration-list") or []
-    medispan = json_body.get("cdtf-")
+    medispan = json_body.get("cdtf-auth-medication")
+    reconcile_status = json_body.get("cdtf-med-reconcile-status")
     internal_note = json_body.get("cdtf-internal-note")
-    if not med_start_iso or not medispan:
+
+    if not med_start_iso or not medispan or not time_list and reconcile_status != "Reconciled":
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Missing required cdtf-med-start-date or cdtf-medispan",
+            detail=f"CDT: {cdt_name} - Missing required cdtf or status is not Reconciled",
         )
     try:
         med_start_dt = datetime.fromisoformat(med_start_iso.replace("Z", "+00:00"))
@@ -101,7 +105,7 @@ async def receive_webhook(
         }
         print(f"CDT payload: {payload_tracker}")
         try:
-            resp = await client.post_cdt(patient_id, payload_tracker, "cdt-emar-med-tracker")
+            resp = await client.post_cdt(patient_id, payload_tracker, "cdt-med-tracker")
             resp.raise_for_status()
             created_entries.append({"time": entry, "status": resp.status_code})
         except httpx.HTTPStatusError as exc:
