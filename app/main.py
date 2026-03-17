@@ -12,6 +12,11 @@ from app.utils import parse_url_components
 app = FastAPI()
 
 
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
 @app.post("/webhook")
 async def receive_webhook(
     request: Request,
