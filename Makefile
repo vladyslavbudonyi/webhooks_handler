@@ -75,9 +75,9 @@ ifneq ("$(wildcard $(CUR_PATH)/.env)","")
 	set -a &&\
 	source $(CUR_PATH)/.env &&\
 	set +a &&\
-	uvicorn app.main:app --host 0.0.0.0 --port 8099
+	PYTHONUNBUFFERED=1 uvicorn app.main:app --host 0.0.0.0 --port 8099
 else
-	uvicorn app.main:app --host 0.0.0.0 --port 8099
+	PYTHONUNBUFFERED=1 uvicorn app.main:app --host 0.0.0.0 --port 8099
 endif
 
 ## ---------------------------------------------------------------------------------------------------

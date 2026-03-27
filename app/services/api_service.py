@@ -61,6 +61,17 @@ class ApiService:
             )
         return resp
 
+    async def get_patient_cdt(self, patient_id: str, cdt_name: str, source_id: str) -> httpx.Response:
+        """GET /patients/{patient_id}/cdts/{cdt_name}?sourceId={source_id}
+
+        Reuses get_resource for auth + automatic token-refresh logic.
+        """
+        url = (
+            f"{settings.API_URL}/{settings.API_TENANT}/{settings.API_INSTANCE}"
+            f"/patients/{patient_id}/cdts/{cdt_name}?sourceId={source_id}"
+        )
+        return await self.get_resource(url)
+
     async def post_cdt(self, patient_id: str, cdt_body: dict, cdt_name: str) -> httpx.Response:
         url = f"{settings.API_URL}/{settings.API_TENANT}/{settings.API_INSTANCE}/patients/{patient_id}/cdts/{cdt_name}"
         token = await self._token_service.get_token()
