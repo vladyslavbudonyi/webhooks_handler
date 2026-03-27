@@ -13,8 +13,8 @@ async def health():
     return {"status": "ok"}
 
 
-@app.post("/webhook")
-async def receive_webhook(
+@app.post("/webhook_medications")
+async def receive_webhook_medications(
     payload: WebhookPayload = Body(...),
     med_service: MedicationService = Depends(medication_service_client),
 ):
@@ -39,3 +39,11 @@ async def receive_webhook(
     created, errors = await med_service.create_medications_cdts(payload.patientId, meds)
 
     return {"status": "ok", "created": created, "errors": errors}
+
+
+@app.post("/webhook_reconciliation")
+async def receive_webhook_reconciliation(
+    payload: WebhookPayload = Body(...),
+    med_service: MedicationService = Depends(medication_service_client),
+):
+    pass

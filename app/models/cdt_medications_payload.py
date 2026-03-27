@@ -25,10 +25,18 @@ class CdtMedicationsPayload(BaseModel):
     parents_comments: Optional[str] = Field(None, alias="cdtf-parents-comments")
     added_by: str = Field("Parent", alias="cdtf-added-by")
     reconcile_status: str = Field(None, alias="cdtf-med-reconcile-status")
+    physician_signature: Optional[str] = Field(None, alias="cdtf-physician-signature")
 
     @classmethod
     def from_assessment_med(cls, med: AssessmentMedBody) -> "CdtMedicationsPayload":
-        """Build a cdt-medications payload from a parsed cdt-med-{n} record."""
+        """Build a cdt-medications payload from a parsed cdt-med-{n} record.
+
+        Physician signature logic:
+          cdtf-discontinued == "Yes"  → cdtf-physician-signature = None  (med is discontinued)
+          cdtf-discontinued == None   → cdtf-physician-signature = "Yes" (active medication)
+        """
+        physician_signature = None if med.discontinued == "Yes" else "Yes"
+
         return cls(
             auth_medication=med.auth_medication,
             quantity=med.quantity,
@@ -39,4 +47,5 @@ class CdtMedicationsPayload(BaseModel):
             frequency_other=med.frequency_other,
             total_per_dose=med.total_per_dose,
             parents_comments=med.parents_comments,
+            physician_signature=physician_signature,
         )
