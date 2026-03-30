@@ -1,6 +1,9 @@
 import asyncio
 import logging
 
+import httpx
+from fastapi import HTTPException
+
 from app.models.assessment_med_body import AssessmentMedBody
 from app.models.cdt_list_response import CdtListResponse
 from app.models.cdt_medications_payload import CdtMedicationsPayload
@@ -50,24 +53,30 @@ class MedicationService:
 
         return meds
 
-    async def _post_one_cdt(self, patient_id: str, i: int, med: AssessmentMedBody) -> dict:
+    # Max concurrent CDT POSTs — keeps load on the downstream API controlled.
+    _MAX_CONCURRENCY = 5
+
+    async def _post_one_cdt(self, patient_id: str, i: int, med: AssessmentMedBody, semaphore: asyncio.Semaphore) -> dict:
         cdt_med_name = f"cdt-med-{i + 1}"
         payload = CdtMedicationsPayload.from_assessment_med(med)
         body = payload.model_dump(by_alias=True)
         try:
-            resp = await self._api.post_cdt(patient_id, body, "cdt-medications")
+            async with semaphore:
+                resp = await self._api.post_cdt(patient_id, body, "cdt-medications")
             resp.raise_for_status()
             return {"ok": {"source": cdt_med_name, "status": resp.status_code}}
-        except Exception as exc:
+        except (httpx.HTTPError, HTTPException) as exc:
             return {"err": {"source": cdt_med_name, "error": str(exc)}}
 
     async def create_medications_cdts(self, patient_id: str, meds: list[AssessmentMedBody]) -> tuple[list, list]:
-        """POST a cdt-medications record for every parsed medication (concurrent).
+        """POST a cdt-medications record for every parsed medication (concurrent, bounded).
 
+        Concurrency is capped at _MAX_CONCURRENCY to avoid overwhelming the downstream API.
         Returns (created, errors) where each entry contains the source cdt-med name
         and either the HTTP status code or the error message.
         """
-        results = await asyncio.gather(*[self._post_one_cdt(patient_id, i, m) for i, m in enumerate(meds)])
+        semaphore = asyncio.Semaphore(self._MAX_CONCURRENCY)
+        results = await asyncio.gather(*[self._post_one_cdt(patient_id, i, m, semaphore) for i, m in enumerate(meds)])
         created = [r["ok"] for r in results if "ok" in r]
         errors = [r["err"] for r in results if "err" in r]
         return created, errors
