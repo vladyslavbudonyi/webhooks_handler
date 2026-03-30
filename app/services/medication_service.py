@@ -20,9 +20,7 @@ class MedicationService:
     def __init__(self, api: ApiService) -> None:
         self._api = api
 
-    async def fetch_assessment_medications(
-        self, patient_id: str, source_id: str
-    ) -> list[AssessmentMedBody]:
+    async def fetch_assessment_medications(self, patient_id: str, source_id: str) -> list[AssessmentMedBody]:
         """Loop cdt-med-1..20 for the given assessment sourceId.
 
         Stops at the first CDT whose content is empty — medications are filled
@@ -47,9 +45,7 @@ class MedicationService:
 
         return meds
 
-    async def create_medications_cdts(
-        self, patient_id: str, meds: list[AssessmentMedBody]
-    ) -> tuple[list, list]:
+    async def create_medications_cdts(self, patient_id: str, meds: list[AssessmentMedBody]) -> tuple[list, list]:
         """POST a cdt-medications record for every parsed medication.
 
         Returns (created, errors) where each entry contains the source cdt-med name

@@ -46,4 +46,4 @@ async def receive_webhook_reconciliation(
     payload: WebhookPayload = Body(...),
     med_service: MedicationService = Depends(medication_service_client),
 ):
-    pass
+    print(f"[webhook] received: {payload.model_dump()}")
