@@ -5,10 +5,12 @@ from app.services.api_service import ApiService
 from app.services.medication_service import MedicationService
 from app.services.token_service import TokenService
 
+# Module-level client — connection pool persists across Lambda warm invocations
+_http_client = httpx.AsyncClient()
+
 
 async def http_client():
-    async with httpx.AsyncClient() as client:
-        yield client
+    yield _http_client
 
 
 async def api_service_client(

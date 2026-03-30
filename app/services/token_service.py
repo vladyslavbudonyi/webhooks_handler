@@ -1,3 +1,4 @@
+import logging
 from typing import Optional
 
 import httpx
@@ -5,12 +6,16 @@ from fastapi import HTTPException, status
 
 from app.config import settings
 
+logger = logging.getLogger(__name__)
+
+# Module-level cache — survives across Lambda warm invocations
+_cached_token: Optional[str] = None
+
 
 class TokenService:
     def __init__(self, http_client: httpx.AsyncClient):
         self._client = http_client
         self._settings = settings
-        self._cached_token: Optional[str] = None
 
     async def _fetch_token(self) -> str:
         url = f"{self._settings.API_URL}/{self._settings.API_TENANT}/admin/api_clients/{self._settings.API_CLIENT}"
@@ -18,7 +23,6 @@ class TokenService:
         body = {"secret": self._settings.API_SECRET.get_secret_value()}
 
         resp = await self._client.post(url, json=body, headers=headers, timeout=10.0)
-        print(resp.json())
         try:
             resp.raise_for_status()
         except httpx.HTTPStatusError as exc:
@@ -34,9 +38,11 @@ class TokenService:
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail="Auth response did not contain 'token' field",
             )
+        logger.info("fetched new OAuth token")
         return f"Bearer {token_value}"
 
     async def get_token(self, force_refresh: bool = False) -> str:
-        if not self._cached_token or force_refresh:
-            self._cached_token = await self._fetch_token()
-        return self._cached_token
+        global _cached_token
+        if not _cached_token or force_refresh:
+            _cached_token = await self._fetch_token()
+        return _cached_token
