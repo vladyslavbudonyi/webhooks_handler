@@ -1,6 +1,9 @@
 import asyncio
 import logging
 
+import httpx
+from fastapi import HTTPException
+
 from app.models.assessment_med_body import AssessmentMedBody
 from app.models.cdt_list_response import CdtListResponse
 from app.models.cdt_medications_payload import CdtMedicationsPayload
@@ -62,7 +65,7 @@ class MedicationService:
                 resp = await self._api.post_cdt(patient_id, body, "cdt-medications")
             resp.raise_for_status()
             return {"ok": {"source": cdt_med_name, "status": resp.status_code}}
-        except Exception as exc:
+        except (httpx.HTTPError, HTTPException) as exc:
             return {"err": {"source": cdt_med_name, "error": str(exc)}}
 
     async def create_medications_cdts(self, patient_id: str, meds: list[AssessmentMedBody]) -> tuple[list, list]:
