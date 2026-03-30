@@ -32,6 +32,12 @@ class AssessmentMedBody(BaseModel):
         mode="before",
     )
     @classmethod
-    def coerce_to_str(cls, v: Any) -> Optional[str]:
-        """Welkin may return numeric defaults for free-text fields; coerce to str."""
-        return str(v) if v is not None else None
+    def coerce_to_str(cls, v: Any) -> Any:
+        """Welkin may return numeric defaults (int/float) for free-text fields; coerce to str.
+
+        Only scalar numerics are coerced — other unexpected types (list, dict, …)
+        are passed through unchanged so Pydantic still raises a ValidationError for them.
+        """
+        if isinstance(v, (int, float)):
+            return str(v)
+        return v
