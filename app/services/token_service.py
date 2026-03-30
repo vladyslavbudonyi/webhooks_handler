@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Optional
 
@@ -10,6 +11,9 @@ logger = logging.getLogger(__name__)
 
 # Module-level cache — survives across Lambda warm invocations
 _cached_token: Optional[str] = None
+
+# Ensures only one coroutine fetches a new token at a time (single-flight refresh)
+_token_refresh_lock = asyncio.Lock()
 
 
 class TokenService:
@@ -43,6 +47,13 @@ class TokenService:
 
     async def get_token(self, force_refresh: bool = False) -> str:
         global _cached_token
-        if not _cached_token or force_refresh:
+        # Fast path — return cached token without acquiring the lock
+        if _cached_token and not force_refresh:
+            return _cached_token
+        # Slow path — only one coroutine should fetch at a time
+        async with _token_refresh_lock:
+            # Re-check inside the lock: another coroutine may have already refreshed
+            if _cached_token and not force_refresh:
+                return _cached_token
             _cached_token = await self._fetch_token()
-        return _cached_token
+            return _cached_token
