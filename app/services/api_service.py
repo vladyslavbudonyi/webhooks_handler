@@ -55,10 +55,22 @@ class ApiService:
         try:
             resp.raise_for_status()
         except httpx.HTTPStatusError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Creating task failed: {exc.response.status_code} - {exc.response.text}",
-            )
+            if exc.response.status_code in (401, 403):
+                token = await self._token_service.get_token(force_refresh=True)
+                headers["Authorization"] = token
+                resp = await self._client.post(url, json=task_body, headers=headers, timeout=10.0)
+                try:
+                    resp.raise_for_status()
+                except httpx.HTTPStatusError as exc2:
+                    raise HTTPException(
+                        status_code=status.HTTP_502_BAD_GATEWAY,
+                        detail=f"Creating task failed after token refresh: {exc2.response.status_code} - {exc2.response.text}",
+                    )
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail=f"Creating task failed: {exc.response.status_code} - {exc.response.text}",
+                )
         return resp
 
     async def get_patient_cdt(self, patient_id: str, cdt_name: str, source_id: str) -> httpx.Response:
@@ -83,8 +95,20 @@ class ApiService:
         try:
             resp.raise_for_status()
         except httpx.HTTPStatusError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Creating task failed: {exc.response.status_code} - {exc.response.text}",
-            )
+            if exc.response.status_code in (401, 403):
+                token = await self._token_service.get_token(force_refresh=True)
+                headers["Authorization"] = token
+                resp = await self._client.post(url, json=cdt_body, headers=headers, timeout=10.0)
+                try:
+                    resp.raise_for_status()
+                except httpx.HTTPStatusError as exc2:
+                    raise HTTPException(
+                        status_code=status.HTTP_502_BAD_GATEWAY,
+                        detail=f"POST cdt failed after token refresh: {exc2.response.status_code} - {exc2.response.text}",
+                    )
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail=f"POST cdt failed: {exc.response.status_code} - {exc.response.text}",
+                )
         return resp
