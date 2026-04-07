@@ -39,7 +39,7 @@ class MedicationService:
     def _cdt_count_for_med(cls, med: AssessmentMedBody) -> int:
         if med.frequency_selector == "Other":
             try:
-                return min(int(med.frequency_other), cls._MAX_FREQUENCY_COUNT)  # type: ignore[arg-type]
+                return max(1, min(int(med.frequency_other), cls._MAX_FREQUENCY_COUNT))  # type: ignore[arg-type]
             except (TypeError, ValueError):
                 return 1
         return cls._FREQUENCY_COUNTS.get(med.frequency_selector, 1)
@@ -98,12 +98,14 @@ class MedicationService:
         """
         semaphore = asyncio.Semaphore(self._MAX_CONCURRENCY)
         tasks = []
+        task_index = 0
         for i, med in enumerate(meds):
             if med.auth_medication is None:
                 continue
             count = self._cdt_count_for_med(med)
             for _ in range(count):
-                tasks.append(self._post_one_cdt(patient_id, i, med, semaphore))
+                tasks.append(self._post_one_cdt(patient_id, task_index, med, semaphore))
+                task_index += 1
         results = await asyncio.gather(*tasks)
         created = [r["ok"] for r in results if "ok" in r]
         errors = [r["err"] for r in results if "err" in r]
