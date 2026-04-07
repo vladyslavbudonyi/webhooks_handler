@@ -33,11 +33,13 @@ class MedicationService:
         "PRN": 1,
     }
 
+    _MAX_FREQUENCY_COUNT = 10
+
     @classmethod
     def _cdt_count_for_med(cls, med: AssessmentMedBody) -> int:
         if med.frequency_selector == "Other":
             try:
-                return int(med.frequency_other)  # type: ignore[arg-type]
+                return min(int(med.frequency_other), cls._MAX_FREQUENCY_COUNT)  # type: ignore[arg-type]
             except (TypeError, ValueError):
                 return 1
         return cls._FREQUENCY_COUNTS.get(med.frequency_selector, 1)
