@@ -33,7 +33,7 @@ class MedicationService:
         "PRN": 1,
     }
 
-    _MAX_FREQUENCY_COUNT = 10
+    _MAX_FREQUENCY_COUNT = 100
 
     @classmethod
     def _cdt_count_for_med(cls, med: AssessmentMedBody) -> int:
