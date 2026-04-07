@@ -25,6 +25,25 @@ class MedicationService:
 
     CDT_MED_NAMES: list[str] = [f"cdt-med-{i}" for i in range(1, 21)]
 
+    _FREQUENCY_COUNTS: dict[str, int] = {
+        "Daily": 1,
+        "Twice a day": 2,
+        "Three times a day": 3,
+        "Four times a day": 4,
+        "PRN": 1,
+    }
+
+    _MAX_FREQUENCY_COUNT = 100
+
+    @classmethod
+    def _cdt_count_for_med(cls, med: AssessmentMedBody) -> int:
+        if med.frequency_selector == "Other":
+            try:
+                return max(1, min(int(med.frequency_other), cls._MAX_FREQUENCY_COUNT))  # type: ignore[arg-type]
+            except (TypeError, ValueError):
+                return 1
+        return cls._FREQUENCY_COUNTS.get(med.frequency_selector, 1)
+
     def __init__(self, api: ApiService) -> None:
         self._api = api
 
@@ -69,14 +88,25 @@ class MedicationService:
             return {"err": {"source": cdt_med_name, "error": str(exc)}}
 
     async def create_medications_cdts(self, patient_id: str, meds: list[AssessmentMedBody]) -> tuple[list, list]:
-        """POST a cdt-medications record for every parsed medication (concurrent, bounded).
+        """POST cdt-medications records for every parsed medication (concurrent, bounded).
 
+        Skips medications where auth_medication is None.
+        Creates N records per medication based on frequency_selector.
         Concurrency is capped at _MAX_CONCURRENCY to avoid overwhelming the downstream API.
         Returns (created, errors) where each entry contains the source cdt-med name
         and either the HTTP status code or the error message.
         """
         semaphore = asyncio.Semaphore(self._MAX_CONCURRENCY)
-        results = await asyncio.gather(*[self._post_one_cdt(patient_id, i, m, semaphore) for i, m in enumerate(meds)])
+        tasks = []
+        task_index = 0
+        for i, med in enumerate(meds):
+            if med.auth_medication is None:
+                continue
+            count = self._cdt_count_for_med(med)
+            for _ in range(count):
+                tasks.append(self._post_one_cdt(patient_id, task_index, med, semaphore))
+                task_index += 1
+        results = await asyncio.gather(*tasks)
         created = [r["ok"] for r in results if "ok" in r]
         errors = [r["err"] for r in results if "err" in r]
         return created, errors
