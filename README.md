@@ -27,3 +27,17 @@ Deploy via terragrunt:
 cd /path/to/terragrunt/aws/v8/stg/us-east-1/lambda/webhooks-handler
 IMAGE_TAG=<image-tag> terragrunt apply
 ```
+
+## Verification
+
+Get the Lambda function URL:
+
+```bash
+terragrunt output function_url
+```
+
+Check logs:
+
+```bash
+aws logs tail /aws/lambda/welikan-webhooks-handler --since 5m --profile welkin-v8-stg
+```
