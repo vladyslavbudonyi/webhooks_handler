@@ -13,19 +13,17 @@ make run
 Build and push the Docker image to ECR:
 
 ```bash
+export IMAGE_TAG=$(git rev-parse --short HEAD)
 
 aws ecr get-login-password --region us-east-1 --profile welkin-cicd | docker login --username AWS --password-stdin 673402552655.dkr.ecr.us-east-1.amazonaws.com
 
-docker build --platform linux/arm64 --provenance=false -f Dockerfile.lambda -t 673402552655.dkr.ecr.us-east-1.amazonaws.com/welikan-webhooks-handler:latest .
-docker push 673402552655.dkr.ecr.us-east-1.amazonaws.com/welikan-webhooks-handler:latest
-
+docker build --platform linux/arm64 --provenance=false -f Dockerfile.lambda -t 673402552655.dkr.ecr.us-east-1.amazonaws.com/welikan-webhooks-handler:$IMAGE_TAG .
+docker push 673402552655.dkr.ecr.us-east-1.amazonaws.com/welikan-webhooks-handler:$IMAGE_TAG
 ```
 
-After pushing, update the Lambda function:
+Deploy via terragrunt:
 
 ```bash
-aws lambda update-function-code \
-  --function-name welikan-webhooks-handler \
-  --image-uri $ECR_URL:latest \
-  --region us-east-1
+cd /path/to/terragrunt/aws/v8/stg/us-east-1/lambda/webhooks-handler
+IMAGE_TAG=<image-tag> terragrunt apply
 ```
