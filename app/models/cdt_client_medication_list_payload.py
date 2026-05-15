@@ -6,11 +6,11 @@ from app.models.assessment_med_body import AssessmentMedBody
 from app.models.constants import ADDED_BY_PARENT
 
 
-class CdtMedicationsPayload(BaseModel):
-    """POST body for the cdt-medications master CDT.
+class CdtClientMedicationListPayload(BaseModel):
+    """POST body for the cdt-client-medication-list CDT.
 
-    Field mapping is defined once here via aliases; update this model
-    if the upstream API field names change — no changes needed elsewhere.
+    Written once per medication when the family's asm-medication-list is submitted.
+    Does not include reconciliation or physician-signature fields — those belong to Script 2.
     """
 
     model_config = ConfigDict(populate_by_name=True)
@@ -24,20 +24,11 @@ class CdtMedicationsPayload(BaseModel):
     frequency_other: Optional[str] = Field(None, alias="cdtf-med-frequency-other")
     total_per_dose: Optional[str] = Field(None, alias="cdtf-total-per-dose")
     parents_comments: Optional[str] = Field(None, alias="cdtf-parents-comments")
+    discontinued: Optional[str] = Field(None, alias="cdtf-discontinued")
     added_by: str = Field(ADDED_BY_PARENT, alias="cdtf-added-by")
-    reconcile_status: str = Field(None, alias="cdtf-med-reconcile-status")
-    physician_signature: Optional[str] = Field(None, alias="cdtf-physician-signature")
 
     @classmethod
-    def from_assessment_med(cls, med: AssessmentMedBody) -> "CdtMedicationsPayload":
-        """Build a cdt-medications payload from a parsed cdt-med-{n} record.
-
-        Physician signature logic:
-          cdtf-discontinued == "Yes"  → cdtf-physician-signature = None  (med is discontinued)
-          cdtf-discontinued == None   → cdtf-physician-signature = "Yes" (active medication)
-        """
-        physician_signature = None if med.discontinued == "Yes" else "Yes"
-
+    def from_assessment_med(cls, med: AssessmentMedBody) -> "CdtClientMedicationListPayload":
         return cls(
             auth_medication=med.auth_medication,
             quantity=med.quantity,
@@ -48,5 +39,5 @@ class CdtMedicationsPayload(BaseModel):
             frequency_other=med.frequency_other,
             total_per_dose=med.total_per_dose,
             parents_comments=med.parents_comments,
-            physician_signature=physician_signature,
+            discontinued=med.discontinued,
         )
