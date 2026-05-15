@@ -5,6 +5,7 @@ import httpx
 from fastapi import HTTPException
 
 from app.models.assessment_med_body import AssessmentMedBody
+from app.models.cdt_client_medication_list_payload import CdtClientMedicationListPayload
 from app.models.cdt_list_response import CdtListResponse
 from app.models.cdt_medications_payload import CdtMedicationsPayload
 from app.services.api_service import ApiService
@@ -86,6 +87,39 @@ class MedicationService:
             return {"ok": {"source": cdt_med_name, "status": resp.status_code}}
         except (httpx.HTTPError, HTTPException) as exc:
             return {"err": {"source": cdt_med_name, "error": str(exc)}}
+
+    async def _post_one_client_med(
+        self, patient_id: str, i: int, med: AssessmentMedBody, semaphore: asyncio.Semaphore
+    ) -> dict:
+        source = f"cdt-med-{i + 1}"
+        payload = CdtClientMedicationListPayload.from_assessment_med(med)
+        body = payload.model_dump(by_alias=True)
+        try:
+            async with semaphore:
+                resp = await self._api.post_cdt(patient_id, body, "cdt-client-medication-list")
+            resp.raise_for_status()
+            return {"ok": {"source": source, "status": resp.status_code}}
+        except (httpx.HTTPError, HTTPException) as exc:
+            return {"err": {"source": source, "error": str(exc)}}
+
+    async def create_client_medication_list(
+        self, patient_id: str, meds: list[AssessmentMedBody]
+    ) -> tuple[list, list]:
+        """POST one cdt-client-medication-list record per medication (Script 1).
+
+        Skips medications where auth_medication is None.
+        Each medication is written exactly once — no frequency multiplication.
+        """
+        semaphore = asyncio.Semaphore(self._MAX_CONCURRENCY)
+        tasks = [
+            self._post_one_client_med(patient_id, i, med, semaphore)
+            for i, med in enumerate(meds)
+            if med.auth_medication is not None
+        ]
+        results = await asyncio.gather(*tasks)
+        created = [r["ok"] for r in results if "ok" in r]
+        errors = [r["err"] for r in results if "err" in r]
+        return created, errors
 
     async def create_medications_cdts(self, patient_id: str, meds: list[AssessmentMedBody]) -> tuple[list, list]:
         """POST cdt-medications records for every parsed medication (concurrent, bounded).

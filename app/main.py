@@ -51,7 +51,7 @@ async def receive_webhook_medications(
             "errors": [],
         }
 
-    created, errors = await med_service.create_medications_cdts(payload.patientId, meds)
+    created, errors = await med_service.create_client_medication_list(payload.patientId, meds)
 
     return {"status": "ok", "created": created, "errors": errors}
 
