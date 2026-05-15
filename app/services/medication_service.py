@@ -98,8 +98,7 @@ class MedicationService:
     ) -> dict:
         source = f"cdt-client-medication-list-{i + 1}"
         payload = CdtClientMedicationListPayload.from_assessment_med(med)
-        body = payload.model_dump(by_alias=True)
-        logger.info(f"[cdt-client-medication-list] posting {source}: {body}")
+        body = payload.model_dump(by_alias=True, exclude_none=True)
         try:
             async with semaphore:
                 resp = await self._api.post_cdt(patient_id, body, "cdt-client-medication-list")

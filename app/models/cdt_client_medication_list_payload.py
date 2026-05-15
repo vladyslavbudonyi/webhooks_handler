@@ -15,7 +15,8 @@ class CdtClientMedicationListPayload(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    auth_medication: Optional[Any] = Field(None, alias="cdtf-auth-medication")
+    # cdtf-authorized-medication (not cdtf-auth-medication — that's the assessment CDT field name)
+    authorized_medication: Optional[Any] = Field(None, alias="cdtf-authorized-medication")
     quantity: Optional[str] = Field(None, alias="cdtf-med-quantity")
     strength: Optional[str] = Field(None, alias="cdtf-med-strength")
     route: Optional[str] = Field(None, alias="cdtf-route")
@@ -24,13 +25,18 @@ class CdtClientMedicationListPayload(BaseModel):
     frequency_other: Optional[str] = Field(None, alias="cdtf-med-frequency-other")
     total_per_dose: Optional[str] = Field(None, alias="cdtf-total-per-dose")
     parents_comments: Optional[str] = Field(None, alias="cdtf-parents-comments")
+    # cdtf-discontinued only accepts "Yes"; omit (None) when the med is active
     discontinued: Optional[str] = Field(None, alias="cdtf-discontinued")
     added_by: str = Field(ADDED_BY_PARENT, alias="cdtf-added-by")
 
     @classmethod
     def from_assessment_med(cls, med: AssessmentMedBody) -> "CdtClientMedicationListPayload":
+        # Extract just the id reference; the profile data type differs between CDTs
+        med_ref = {"id": med.auth_medication["id"]} if isinstance(med.auth_medication, dict) else med.auth_medication
+        # Only write discontinued when explicitly "Yes" — the select has no "No" option
+        discontinued = "Yes" if med.discontinued == "Yes" else None
         return cls(
-            auth_medication=med.auth_medication,
+            authorized_medication=med_ref,
             quantity=med.quantity,
             strength=med.strength,
             route=med.route,
@@ -39,5 +45,5 @@ class CdtClientMedicationListPayload(BaseModel):
             frequency_other=med.frequency_other,
             total_per_dose=med.total_per_dose,
             parents_comments=med.parents_comments,
-            discontinued=med.discontinued,
+            discontinued=discontinued,
         )
