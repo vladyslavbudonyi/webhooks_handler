@@ -31,7 +31,8 @@ class CdtClientMedicationListPayload(BaseModel):
 
     @classmethod
     def from_assessment_med(cls, med: AssessmentMedBody) -> "CdtClientMedicationListPayload":
-        # Extract just the id reference; the profile data type differs between CDTs
+        # cdt-med-n uses pdt-mf2 (pdtf-mf2-tc-gpi_full-*); cdt-client-medication-list uses
+        # pdt-medications (pdtf-medications). Only the id is shared — strip the extra fields.
         med_ref = {"id": med.auth_medication["id"]} if isinstance(med.auth_medication, dict) else med.auth_medication
         # Only write discontinued when explicitly "Yes" — the select has no "No" option
         discontinued = "Yes" if med.discontinued == "Yes" else None

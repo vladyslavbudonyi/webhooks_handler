@@ -78,7 +78,7 @@ class MedicationService:
 
     @staticmethod
     def _exc_message(exc: Exception) -> str:
-        return exc.detail if isinstance(exc, HTTPException) else str(exc)
+        return str(exc.detail) if isinstance(exc, HTTPException) else str(exc)
 
     async def _post_one_cdt(self, patient_id: str, i: int, med: AssessmentMedBody, semaphore: asyncio.Semaphore) -> dict:
         cdt_med_name = f"cdt-med-{i + 1}"
@@ -87,6 +87,7 @@ class MedicationService:
         try:
             async with semaphore:
                 resp = await self._api.post_cdt(patient_id, body, "cdt-medications")
+            resp.raise_for_status()
             return {"ok": {"source": cdt_med_name, "status": resp.status_code}}
         except (httpx.HTTPError, HTTPException) as exc:
             msg = self._exc_message(exc)
@@ -102,6 +103,7 @@ class MedicationService:
         try:
             async with semaphore:
                 resp = await self._api.post_cdt(patient_id, body, "cdt-client-medication-list")
+            resp.raise_for_status()
             return {"ok": {"source": source, "status": resp.status_code}}
         except (httpx.HTTPError, HTTPException) as exc:
             msg = self._exc_message(exc)
