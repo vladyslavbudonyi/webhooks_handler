@@ -91,7 +91,7 @@ class MedicationService:
     async def _post_one_client_med(
         self, patient_id: str, i: int, med: AssessmentMedBody, semaphore: asyncio.Semaphore
     ) -> dict:
-        source = f"cdt-med-{i + 1}"
+        source = f"cdt-client-medication-list-{i + 1}"
         payload = CdtClientMedicationListPayload.from_assessment_med(med)
         body = payload.model_dump(by_alias=True)
         try:
@@ -104,7 +104,7 @@ class MedicationService:
 
     async def create_client_medication_list(
         self, patient_id: str, meds: list[AssessmentMedBody]
-    ) -> tuple[list, list]:
+    ) -> tuple[list[dict], list[dict]]:
         """POST one cdt-client-medication-list record per medication (Script 1).
 
         Skips medications where auth_medication is None.

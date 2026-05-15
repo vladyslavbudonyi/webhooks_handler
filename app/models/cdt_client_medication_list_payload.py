@@ -3,6 +3,7 @@ from typing import Any, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.assessment_med_body import AssessmentMedBody
+from app.models.constants import ADDED_BY_PARENT
 
 
 class CdtClientMedicationListPayload(BaseModel):
@@ -24,7 +25,7 @@ class CdtClientMedicationListPayload(BaseModel):
     total_per_dose: Optional[str] = Field(None, alias="cdtf-total-per-dose")
     parents_comments: Optional[str] = Field(None, alias="cdtf-parents-comments")
     discontinued: Optional[str] = Field(None, alias="cdtf-discontinued")
-    added_by: str = Field("Parent", alias="cdtf-added-by")
+    added_by: str = Field(ADDED_BY_PARENT, alias="cdtf-added-by")
 
     @classmethod
     def from_assessment_med(cls, med: AssessmentMedBody) -> "CdtClientMedicationListPayload":
