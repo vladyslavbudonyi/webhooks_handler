@@ -1,8 +1,11 @@
 import datetime
+import logging
 from typing import Tuple
 from urllib.parse import urlparse
 
 from fastapi import HTTPException, status
+
+logger = logging.getLogger(__name__)
 
 
 def parse_url_components(full_url: str) -> Tuple[str, str, str]:
@@ -55,10 +58,27 @@ def iso_midnight_utc(dt: datetime.datetime) -> str:
     )
 
 
+def parse_welkin_date(s: str | None) -> datetime.date:
+    """Parse a Welkin ISO datetime string (e.g. "2026-05-30T00:00:00.000Z") to a date.
+
+    Raises ValueError with a descriptive message if the value is missing or malformed.
+    """
+    if not s:
+        raise ValueError("stay date is missing or empty; expected an ISO 8601 string")
+    try:
+        return datetime.datetime.fromisoformat(s.replace("Z", "+00:00")).date()
+    except ValueError as exc:
+        raise ValueError(f"invalid stay date format: {s!r}; expected an ISO 8601 string") from exc
+
+
 def date_range(start: datetime.date, end: datetime.date) -> list[datetime.date]:
     """Return all dates from start to end inclusive.
 
-    If end is before start (data error), returns [start] rather than an empty list.
+    If end is before start (data error), logs a warning and returns [start] so
+    callers always receive at least one date rather than silently getting nothing.
     """
-    days = max((end - start).days + 1, 1)
+    if end < start:
+        logger.warning("date_range called with end (%s) < start (%s); returning [start] only", end, start)
+        return [start]
+    days = (end - start).days + 1
     return [start + datetime.timedelta(days=i) for i in range(days)]

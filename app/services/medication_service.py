@@ -4,7 +4,7 @@ import logging
 from typing import Optional
 
 import httpx
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 
 from app.models.assessment_med_body import AssessmentMedBody
 from app.models.cdt_client_medication_list_payload import CdtClientMedicationListPayload
@@ -13,7 +13,7 @@ from app.models.cdt_medications_payload import CdtMedicationsPayload
 from app.models.client_medication_body import ClientMedicationBody
 from app.models.my_stays_body import MyStaysBody
 from app.services.api_service import ApiService
-from app.utils.utils import date_range, iso_midnight_utc
+from app.utils.utils import date_range, iso_midnight_utc, parse_welkin_date
 
 logger = logging.getLogger(__name__)
 
@@ -195,12 +195,12 @@ class MedicationService:
 
         Example: Tylenol 2×/day, stay May 20–21 → 4 records total.
         """
-        # Welkin stores dates as "2026-05-30T00:00:00.000Z" — parse to date objects
-        def _parse_welkin_date(s: str) -> datetime.date:
-            return datetime.datetime.fromisoformat(s.replace("Z", "+00:00")).date()
+        try:
+            start = parse_welkin_date(stays.start_date)
+            end = parse_welkin_date(stays.end_date)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
-        start = _parse_welkin_date(stays.start_date)  # type: ignore[arg-type]
-        end = _parse_welkin_date(stays.end_date)  # type: ignore[arg-type]
         dates = date_range(start, end)
 
         logger.info(
@@ -219,7 +219,14 @@ class MedicationService:
                 for _ in range(freq):
                     tasks.append(self._post_reconciled_med(patient_id, med, administer_date, semaphore))
 
-        logger.info(f"[reconciliation] posting {len(tasks)} cdt-medications record(s)")
+        _TASK_WARN_THRESHOLD = 200
+        if len(tasks) > _TASK_WARN_THRESHOLD:
+            logger.warning(
+                f"[reconciliation] large task batch: {len(tasks)} cdt-medications records "
+                f"({len(meds)} meds × {len(dates)} days); verify stay dates are correct"
+            )
+        else:
+            logger.info(f"[reconciliation] posting {len(tasks)} cdt-medications record(s)")
         results = await asyncio.gather(*tasks)
         created = [r["ok"] for r in results if "ok" in r]
         errors = [r["err"] for r in results if "err" in r]

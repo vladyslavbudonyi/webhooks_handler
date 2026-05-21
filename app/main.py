@@ -61,14 +61,16 @@ async def receive_webhook_reconciliation(
     payload: WebhookPayload = Body(...),
     med_service: MedicationService = Depends(medication_service_client),
 ):
+    # Log only non-PHI fields at INFO; patient identifiers and URL stay at DEBUG
     logger.info(
-        f"sourceId='{payload.sourceId}' instanceName='{payload.instanceName}' "
-        f"patientId='{payload.patientId}' initiatedByObjectType='{payload.initiatedByObjectType}' "
-        f"url='{payload.url}' initiatedByName='{payload.initiatedByName}' "
-        f"eventSubtype='{payload.eventSubtype}' initiatedByObjectId='{payload.initiatedByObjectId}' "
-        f"tenantName='{payload.tenantName}' eventEntity='{payload.eventEntity}' "
-        f"initiatedTime='{payload.initiatedTime}' initiatedByClientType='{payload.initiatedByClientType}' "
-        f"sourceName='{payload.sourceName}' initiatedBy='{payload.initiatedBy}'"
+        f"[webhook_reconciliation] sourceId='{payload.sourceId}' tenantName='{payload.tenantName}' "
+        f"eventEntity='{payload.eventEntity}' eventSubtype='{payload.eventSubtype}' "
+        f"sourceName='{payload.sourceName}' initiatedByClientType='{payload.initiatedByClientType}' "
+        f"initiatedTime='{payload.initiatedTime}'"
+    )
+    logger.debug(
+        f"[webhook_reconciliation] patientId='{payload.patientId}' url='{payload.url}' "
+        f"initiatedByName='{payload.initiatedByName}' initiatedBy='{payload.initiatedBy}'"
     )
 
     if payload.tenantName != settings.API_TENANT:
