@@ -164,21 +164,36 @@ class MedicationService:
         logger.info(f"[cdt-client-medication-list] fetched {len(meds)} medication(s) for patient {patient_id}")
         return meds
 
-    async def fetch_assessment_med_refs(self, patient_id: str) -> dict[str, Any]:
-        """Build a map of {medication_id → full_auth_medication_dict} from all cdt-med-* CDTs.
+    async def fetch_assessment_med_refs(
+        self, patient_id: str, target_ids: frozenset[str]
+    ) -> dict[str, Any]:
+        """Build a map of {medication_id → full_auth_medication_dict} from cdt-med-* CDTs.
 
         cdt-client-medication-list/cdtf-authorized-medication (pdt-medications) is normalised by
         Welkin to {"id": "..."} on read, losing the fields required by cdt-medications/cdtf-auth-medication
         (pdt-medispan, which requires pdtf-mf2-tc-gpi_full-gpi_tcgpi-name).
 
-        Reading cdt-med-{n} without a sourceId filter returns all records for this patient across
-        all assessments. Each non-empty record carries the original full pdt-medispan reference that
-        was submitted by the parent; we index it by id so that reconciliation can look it up.
+        Fetches cdt-med-{n} in order without a sourceId filter (so all assessments are covered) and
+        stops as soon as every id in target_ids has been resolved — typically 2–3 GETs for a patient
+        with a small number of medications rather than the full 20.  Falls back to stopping at the
+        first empty CDT (medications are filled sequentially, so a gap means no further entries exist).
         """
         ref_map: dict[str, Any] = {}
         for cdt_name in self.CDT_MED_NAMES:
+            if target_ids and ref_map.keys() >= target_ids:
+                logger.info(
+                    f"[assessment-med-refs] all {len(target_ids)} target id(s) resolved "
+                    f"before reaching {cdt_name} — stopping early"
+                )
+                break
+
             resp = await self._api.get_all_patient_cdts(patient_id, cdt_name)
             cdt_list = CdtListResponse.model_validate(resp.json())
+
+            if not cdt_list.data.content:
+                logger.info(f"[assessment-med-refs] {cdt_name} is empty — stopping early")
+                break
+
             for record in cdt_list.data.content:
                 try:
                     med = AssessmentMedBody.model_validate(record.jsonBody)
@@ -192,6 +207,7 @@ class MedicationService:
                     med_id = med.auth_medication.get("id")
                     if med_id and med_id not in ref_map:
                         ref_map[med_id] = med.auth_medication
+
         logger.info(f"[assessment-med-refs] built reference map with {len(ref_map)} unique medication id(s)")
         return ref_map
 
@@ -246,7 +262,12 @@ class MedicationService:
         # Build a {medication_id → full pdt-medispan dict} map from cdt-med-* CDTs.
         # cdt-client-medication-list/cdtf-authorized-medication (pdt-medications) is normalised to
         # {"id": "..."} by Welkin on read, so we must re-fetch the full reference from the source CDTs.
-        med_refs = await self.fetch_assessment_med_refs(patient_id)
+        target_ids = frozenset(
+            med.authorized_medication["id"]
+            for med in meds
+            if isinstance(med.authorized_medication, dict) and med.authorized_medication.get("id")
+        )
+        med_refs = await self.fetch_assessment_med_refs(patient_id, target_ids)
 
         semaphore = asyncio.Semaphore(self._MAX_CONCURRENCY)
         tasks = []
