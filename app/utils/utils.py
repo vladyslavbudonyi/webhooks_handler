@@ -49,7 +49,16 @@ def build_description(dosage_per_unit, medication_name, times_per_unit, duration
         return f"{medication_name or 'Medication'} – {duration_int} {duration_unit.lower()}"
 
 
-def iso_midnight_utc(dt: datetime) -> str:
+def iso_midnight_utc(dt: datetime.datetime) -> str:
     return dt.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=datetime.timezone.utc).strftime(
         "%Y-%m-%dT%H:%M:%S.000Z"
     )
+
+
+def date_range(start: datetime.date, end: datetime.date) -> list[datetime.date]:
+    """Return all dates from start to end inclusive.
+
+    If end is before start (data error), returns [start] rather than an empty list.
+    """
+    days = max((end - start).days + 1, 1)
+    return [start + datetime.timedelta(days=i) for i in range(days)]
