@@ -1,0 +1,25 @@
+from typing import Any, Optional
+
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class ClientMedicationBody(BaseModel):
+    """Parsed jsonBody from a cdt-client-medication-list CDT record.
+
+    Written by Script 1; read back by Script 2 to generate dated dose records.
+    Note: the medication reference field is cdtf-authorized-medication here,
+    which differs from cdtf-auth-medication used in the assessment CDTs.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    authorized_medication: Optional[Any] = Field(None, alias="cdtf-authorized-medication")
+    quantity: Optional[str] = Field(None, alias="cdtf-med-quantity")
+    strength: Optional[str] = Field(None, alias="cdtf-med-strength")
+    route: Optional[str] = Field(None, alias="cdtf-route")
+    route_other: Optional[str] = Field(None, alias="cdtf-route-other")
+    frequency_selector: Optional[str] = Field(None, alias="cdtf-med-frequency-selector")
+    frequency_other: Optional[str] = Field(None, alias="cdtf-med-frequency-other")
+    total_per_dose: Optional[str] = Field(None, alias="cdtf-total-per-dose")
+    parents_comments: Optional[str] = Field(None, alias="cdtf-parents-comments")
+    discontinued: Optional[str] = Field(None, alias="cdtf-discontinued")

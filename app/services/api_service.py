@@ -92,3 +92,12 @@ class ApiService:
     async def post_cdt(self, patient_id: str, cdt_body: dict, cdt_name: str) -> httpx.Response:
         url = f"{settings.API_URL}/{settings.API_TENANT}/{settings.API_INSTANCE}/patients/{patient_id}/cdts/{cdt_name}"
         return await self._post_with_auth_retry(url, cdt_body, f"POST cdt {cdt_name}")
+
+    async def get_all_patient_cdts(self, patient_id: str, cdt_name: str) -> httpx.Response:
+        """GET all CDT records for a patient without sourceId filter.
+
+        Used to retrieve the full cdt-client-medication-list for a patient
+        regardless of which assessment session created each entry.
+        """
+        url = f"{settings.API_URL}/{settings.API_TENANT}/{settings.API_INSTANCE}/patients/{patient_id}/cdts/{cdt_name}"
+        return await self.get_resource(url)
