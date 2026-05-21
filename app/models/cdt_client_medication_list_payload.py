@@ -31,13 +31,13 @@ class CdtClientMedicationListPayload(BaseModel):
 
     @classmethod
     def from_assessment_med(cls, med: AssessmentMedBody) -> "CdtClientMedicationListPayload":
-        # cdt-med-n uses pdt-mf2 (pdtf-mf2-tc-gpi_full-*); cdt-client-medication-list uses
-        # pdt-medications (pdtf-medications). Only the id is shared — strip the extra fields.
-        med_ref = {"id": med.auth_medication["id"]} if isinstance(med.auth_medication, dict) else med.auth_medication
+        # Pass the full auth_medication object unchanged (including pdtf-mf2-tc-gpi_full-gpi_tcgpi-name).
+        # cdt-medications/cdtf-auth-medication (pdt-medispan) requires this field when writing,
+        # so Script 2 needs the complete reference available when it reads from this CDT.
         # Only write discontinued when explicitly "Yes" — the select has no "No" option
         discontinued = "Yes" if med.discontinued == "Yes" else None
         return cls(
-            authorized_medication=med_ref,
+            authorized_medication=med.auth_medication,
             quantity=med.quantity,
             strength=med.strength,
             route=med.route,

@@ -63,6 +63,10 @@ class CdtMedicationsPayload(BaseModel):
 
         Called once per dose per day during reconciliation.
         administer_date: ISO datetime string, e.g. "2026-05-30T00:00:00.000Z"
+
+        authorized_medication is passed through as auth_medication. Script 1 preserves the
+        full pdt-medispan reference (including pdtf-mf2-tc-gpi_full-gpi_tcgpi-name) so that
+        cdt-medications/cdtf-auth-medication validation passes.
         """
         physician_signature = None if med.discontinued == "Yes" else "Yes"
         return cls(
