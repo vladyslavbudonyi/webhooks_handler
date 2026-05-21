@@ -161,6 +161,8 @@ class MedicationService:
         cdt_list = CdtListResponse.model_validate(resp.json())
         meds = [ClientMedicationBody.model_validate(r.jsonBody) for r in cdt_list.data.content]
         logger.info(f"[cdt-client-medication-list] fetched {len(meds)} medication(s) for patient {patient_id}")
+        for i, med in enumerate(meds):
+            logger.info(f"[cdt-client-medication-list] med[{i}] authorized_medication={med.authorized_medication!r}")
         return meds
 
     async def _post_reconciled_med(
