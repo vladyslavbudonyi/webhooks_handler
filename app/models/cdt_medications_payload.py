@@ -62,7 +62,7 @@ class CdtMedicationsPayload(BaseModel):
         cls,
         med: ClientMedicationBody,
         administer_date: str,
-        auth_medication_override: Optional[Any] = None,
+        auth_medication_override: Optional[dict[str, Any]] = None,
     ) -> "CdtMedicationsPayload":
         """Build a cdt-medications payload from a cdt-client-medication-list record (Script 2).
 

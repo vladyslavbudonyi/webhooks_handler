@@ -1,10 +1,11 @@
 import asyncio
 import datetime
 import logging
-from typing import Optional
+from typing import Any, Optional
 
 import httpx
 from fastapi import HTTPException, status
+from pydantic import ValidationError
 
 from app.models.assessment_med_body import AssessmentMedBody
 from app.models.cdt_client_medication_list_payload import CdtClientMedicationListPayload
@@ -163,7 +164,7 @@ class MedicationService:
         logger.info(f"[cdt-client-medication-list] fetched {len(meds)} medication(s) for patient {patient_id}")
         return meds
 
-    async def fetch_assessment_med_refs(self, patient_id: str) -> dict:
+    async def fetch_assessment_med_refs(self, patient_id: str) -> dict[str, Any]:
         """Build a map of {medication_id → full_auth_medication_dict} from all cdt-med-* CDTs.
 
         cdt-client-medication-list/cdtf-authorized-medication (pdt-medications) is normalised by
@@ -174,14 +175,18 @@ class MedicationService:
         all assessments. Each non-empty record carries the original full pdt-medispan reference that
         was submitted by the parent; we index it by id so that reconciliation can look it up.
         """
-        ref_map: dict = {}
+        ref_map: dict[str, Any] = {}
         for cdt_name in self.CDT_MED_NAMES:
             resp = await self._api.get_all_patient_cdts(patient_id, cdt_name)
             cdt_list = CdtListResponse.model_validate(resp.json())
             for record in cdt_list.data.content:
                 try:
                     med = AssessmentMedBody.model_validate(record.jsonBody)
-                except Exception:
+                except ValidationError as exc:
+                    logger.warning(
+                        f"[assessment-med-refs] skipping record id={record.id!r} in {cdt_name}: "
+                        f"validation failed — {exc}"
+                    )
                     continue
                 if med.auth_medication and isinstance(med.auth_medication, dict):
                     med_id = med.auth_medication.get("id")
@@ -196,7 +201,7 @@ class MedicationService:
         med: ClientMedicationBody,
         administer_date: str,
         semaphore: asyncio.Semaphore,
-        auth_medication_override: Optional[Any] = None,
+        auth_medication_override: Optional[dict[str, Any]] = None,
     ) -> dict:
         payload = CdtMedicationsPayload.from_client_medication(
             med, administer_date, auth_medication_override=auth_medication_override
