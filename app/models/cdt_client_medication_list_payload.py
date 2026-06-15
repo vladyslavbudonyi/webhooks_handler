@@ -15,8 +15,7 @@ class CdtClientMedicationListPayload(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    # cdtf-authorized-medication (not cdtf-auth-medication — that's the assessment CDT field name)
-    authorized_medication: Optional[Any] = Field(None, alias="cdtf-authorized-medication")
+    authorized_medication: Optional[Any] = Field(None, alias="cdtf-authorized-medications")
     quantity: Optional[str] = Field(None, alias="cdtf-med-quantity")
     strength: Optional[str] = Field(None, alias="cdtf-med-strength")
     route: Optional[str] = Field(None, alias="cdtf-route")
