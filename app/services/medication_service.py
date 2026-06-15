@@ -1,5 +1,6 @@
 import asyncio
 import datetime
+import json
 import logging
 from typing import Any, Optional
 
@@ -80,8 +81,9 @@ class MedicationService:
 
         for cdt_name in self.CDT_MED_NAMES:
             resp = await self._api.get_patient_cdt(patient_id, cdt_name, source_id)
-            logger.info(f"[{cdt_name}] response JSON: {resp.json()}")
-            cdt_list = CdtListResponse.model_validate(resp.json())
+            resp_json = resp.json()
+            logger.info(f"[{cdt_name}] response JSON: {json.dumps(resp_json)}")
+            cdt_list = CdtListResponse.model_validate(resp_json)
 
             logger.info(f"[{cdt_name}] content count: {len(cdt_list.data.content)}")
 
@@ -189,8 +191,9 @@ class MedicationService:
                 break
 
             resp = await self._api.get_all_patient_cdts(patient_id, cdt_name)
-            logger.info(f"[assessment-med-refs][{cdt_name}] response JSON: {resp.json()}")
-            cdt_list = CdtListResponse.model_validate(resp.json())
+            resp_json = resp.json()
+            logger.info(f"[assessment-med-refs][{cdt_name}] response JSON: {json.dumps(resp_json)}")
+            cdt_list = CdtListResponse.model_validate(resp_json)
 
             if not cdt_list.data.content:
                 logger.info(f"[assessment-med-refs] {cdt_name} is empty — stopping early")
