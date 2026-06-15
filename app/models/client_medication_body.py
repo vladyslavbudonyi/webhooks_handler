@@ -8,7 +8,7 @@ class ClientMedicationBody(BaseModel):
 
     Written by Script 1; read back by Script 2 to generate dated dose records.
     Note: the medication reference field is cdtf-authorized-medication here,
-    which differs from cdtf-auth-medication used in the assessment CDTs.
+    which differs from cdtf-authorized-medications used in the assessment CDTs.
     """
 
     model_config = ConfigDict(populate_by_name=True)
