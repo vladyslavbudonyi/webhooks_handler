@@ -16,7 +16,7 @@ class _JsonFormatter(logging.Formatter):
 
 _handler = logging.StreamHandler()
 _handler.setFormatter(_JsonFormatter())
-logging.basicConfig(handlers=[_handler], level=logging.INFO, force=True)
+logging.basicConfig(handlers=[_handler], level=settings.LOG_LEVEL.upper(), force=True)
 
 logger = logging.getLogger(__name__)
 

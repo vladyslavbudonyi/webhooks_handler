@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     API_INSTANCE: str = ""
     API_CLIENT: str = ""
     API_SECRET: SecretStr = SecretStr("")
+    LOG_LEVEL: str = "INFO"
 
 
 __all__ = ["settings"]

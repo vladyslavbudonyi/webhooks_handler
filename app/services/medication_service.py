@@ -82,7 +82,7 @@ class MedicationService:
         for cdt_name in self.CDT_MED_NAMES:
             resp = await self._api.get_patient_cdt(patient_id, cdt_name, source_id)
             resp_json = resp.json()
-            logger.info(f"[{cdt_name}] response JSON: {json.dumps(resp_json)}")
+            logger.debug(f"[{cdt_name}] response JSON: {json.dumps(resp_json)}")
             cdt_list = CdtListResponse.model_validate(resp_json)
 
             logger.info(f"[{cdt_name}] content count: {len(cdt_list.data.content)}")
@@ -192,7 +192,7 @@ class MedicationService:
 
             resp = await self._api.get_all_patient_cdts(patient_id, cdt_name)
             resp_json = resp.json()
-            logger.info(f"[assessment-med-refs][{cdt_name}] response JSON: {json.dumps(resp_json)}")
+            logger.debug(f"[assessment-med-refs][{cdt_name}] response JSON: {json.dumps(resp_json)}")
             cdt_list = CdtListResponse.model_validate(resp_json)
 
             if not cdt_list.data.content:
