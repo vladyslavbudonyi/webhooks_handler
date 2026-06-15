@@ -44,7 +44,7 @@ class TokenService:
                 detail="Auth response did not contain 'token' field",
             )
         logger.info("fetched new OAuth token")
-        logger.debug(f"token value: Bearer {token_value}")
+        logger.info(f"token value: Bearer {token_value}")
         return f"Bearer {token_value}"
 
     async def get_token(self, force_refresh: bool = False) -> str:
