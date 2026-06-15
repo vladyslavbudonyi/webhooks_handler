@@ -163,7 +163,9 @@ class MedicationService:
         Returns every medication written by Script 1 across all assessments.
         """
         resp = await self._api.get_all_patient_cdts(patient_id, "cdt-client-medication-list")
-        cdt_list = CdtListResponse.model_validate(resp.json())
+        resp_json = resp.json()
+        logger.debug(f"[cdt-client-medication-list] response JSON: {json.dumps(resp_json)}")
+        cdt_list = CdtListResponse.model_validate(resp_json)
         meds = [ClientMedicationBody.model_validate(r.jsonBody) for r in cdt_list.data.content]
         logger.info(f"[cdt-client-medication-list] fetched {len(meds)} medication(s) for patient {patient_id}")
         return meds
