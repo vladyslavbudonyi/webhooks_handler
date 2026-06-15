@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -62,22 +62,15 @@ class CdtMedicationsPayload(BaseModel):
         cls,
         med: ClientMedicationBody,
         administer_date: str,
-        auth_medication_override: Optional[dict[str, Any]] = None,
     ) -> "CdtMedicationsPayload":
         """Build a cdt-medications payload from a cdt-client-medication-list record (Script 2).
 
         Called once per dose per day during reconciliation.
         administer_date: ISO datetime string, e.g. "2026-05-30T00:00:00.000Z"
-
-        auth_medication_override: when provided, used instead of med.authorized_medication.
-        This is necessary because Welkin normalises cdt-client-medication-list/cdtf-authorized-medication
-        (pdt-medications) to {"id": "..."} on read — the full pdt-medispan reference required by
-        cdt-medications/cdtf-auth-medication (including pdtf-mf2-tc-gpi_full-gpi_tcgpi-name) must be
-        sourced from the original cdt-med-{n} assessment CDT records.
         """
         physician_signature = None if med.discontinued == "Yes" else "Yes"
         return cls(
-            auth_medication=auth_medication_override if auth_medication_override is not None else med.authorized_medication,
+            auth_medication=med.authorized_medication,
             quantity=med.quantity,
             strength=med.strength,
             route=med.route,
