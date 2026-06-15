@@ -7,13 +7,11 @@ class ClientMedicationBody(BaseModel):
     """Parsed jsonBody from a cdt-client-medication-list CDT record.
 
     Written by Script 1; read back by Script 2 to generate dated dose records.
-    Note: the medication reference field is cdtf-authorized-medication here,
-    which differs from cdtf-authorized-medications used in the assessment CDTs.
     """
 
     model_config = ConfigDict(populate_by_name=True)
 
-    authorized_medication: Optional[Any] = Field(None, alias="cdtf-authorized-medication")
+    authorized_medication: Optional[Any] = Field(None, alias="cdtf-authorized-medications")
     quantity: Optional[str] = Field(None, alias="cdtf-med-quantity")
     strength: Optional[str] = Field(None, alias="cdtf-med-strength")
     route: Optional[str] = Field(None, alias="cdtf-route")
