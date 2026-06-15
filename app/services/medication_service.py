@@ -2,11 +2,10 @@ import asyncio
 import datetime
 import json
 import logging
-from typing import Any, Optional
+from typing import Optional
 
 import httpx
 from fastapi import HTTPException, status
-from pydantic import ValidationError
 
 from app.models.assessment_med_body import AssessmentMedBody
 from app.models.cdt_client_medication_list_payload import CdtClientMedicationListPayload
@@ -169,66 +168,14 @@ class MedicationService:
         logger.info(f"[cdt-client-medication-list] fetched {len(meds)} medication(s) for patient {patient_id}")
         return meds
 
-    async def fetch_assessment_med_refs(
-        self, patient_id: str, target_ids: frozenset[str]
-    ) -> dict[str, Any]:
-        """Build a map of {medication_id → full_auth_medication_dict} from cdt-med-* CDTs.
-
-        cdt-client-medication-list/cdtf-authorized-medication (pdt-medications) is normalised by
-        Welkin to {"id": "..."} on read, losing the fields required by cdt-medications/cdtf-auth-medication
-        (pdt-medispan, which requires pdtf-mf2-tc-gpi_full-gpi_tcgpi-name).
-
-        Fetches cdt-med-{n} in order without a sourceId filter (so all assessments are covered) and
-        stops as soon as every id in target_ids has been resolved — typically 2–3 GETs for a patient
-        with a small number of medications rather than the full 20.  Falls back to stopping at the
-        first empty CDT (medications are filled sequentially, so a gap means no further entries exist).
-        """
-        ref_map: dict[str, Any] = {}
-        for cdt_name in self.CDT_MED_NAMES:
-            if target_ids and ref_map.keys() >= target_ids:
-                logger.info(
-                    f"[assessment-med-refs] all {len(target_ids)} target id(s) resolved "
-                    f"before reaching {cdt_name} — stopping early"
-                )
-                break
-
-            resp = await self._api.get_all_patient_cdts(patient_id, cdt_name)
-            resp_json = resp.json()
-            logger.debug(f"[assessment-med-refs][{cdt_name}] response JSON: {json.dumps(resp_json)}")
-            cdt_list = CdtListResponse.model_validate(resp_json)
-
-            if not cdt_list.data.content:
-                logger.info(f"[assessment-med-refs] {cdt_name} is empty — stopping early")
-                break
-
-            for record in cdt_list.data.content:
-                try:
-                    med = AssessmentMedBody.model_validate(record.jsonBody)
-                except ValidationError as exc:
-                    logger.warning(
-                        f"[assessment-med-refs] skipping record id={record.id!r} in {cdt_name}: "
-                        f"validation failed — {exc}"
-                    )
-                    continue
-                if med.auth_medication and isinstance(med.auth_medication, dict):
-                    med_id = med.auth_medication.get("id")
-                    if med_id and med_id not in ref_map:
-                        ref_map[med_id] = med.auth_medication
-
-        logger.info(f"[assessment-med-refs] built reference map with {len(ref_map)} unique medication id(s)")
-        return ref_map
-
     async def _post_reconciled_med(
         self,
         patient_id: str,
         med: ClientMedicationBody,
         administer_date: str,
         semaphore: asyncio.Semaphore,
-        auth_medication_override: Optional[dict[str, Any]] = None,
     ) -> dict:
-        payload = CdtMedicationsPayload.from_client_medication(
-            med, administer_date, auth_medication_override=auth_medication_override
-        )
+        payload = CdtMedicationsPayload.from_client_medication(med, administer_date)
         body = payload.model_dump(by_alias=True, exclude_none=True)
         try:
             async with semaphore:
@@ -266,38 +213,16 @@ class MedicationService:
             f"({len(dates)} day(s)), {len(meds)} medication(s)"
         )
 
-        # Build a {medication_id → full pdt-medispan dict} map from cdt-med-* CDTs.
-        # cdt-client-medication-list/cdtf-authorized-medication (pdt-medications) is normalised to
-        # {"id": "..."} by Welkin on read, so we must re-fetch the full reference from the source CDTs.
-        target_ids = frozenset(
-            med.authorized_medication["id"]
-            for med in meds
-            if isinstance(med.authorized_medication, dict) and med.authorized_medication.get("id")
-        )
-        med_refs = await self.fetch_assessment_med_refs(patient_id, target_ids)
-
         semaphore = asyncio.Semaphore(self._MAX_CONCURRENCY)
         tasks = []
         for med in meds:
             if med.authorized_medication is None:
                 continue
-            # Resolve the full pdt-medispan reference; fall back to the normalised dict if not found
-            med_id = med.authorized_medication.get("id") if isinstance(med.authorized_medication, dict) else None
-            full_auth = med_refs.get(med_id) if med_id else None
-            if full_auth is None:
-                logger.warning(
-                    f"[reconciliation] no full pdt-medispan ref found for medication id={med_id!r}; "
-                    "posting with normalised reference — may fail validation"
-                )
             freq = self._frequency_count(med.frequency_selector, med.frequency_other)
             for date in dates:
                 administer_date = iso_midnight_utc(datetime.datetime.combine(date, datetime.time.min))
                 for _ in range(freq):
-                    tasks.append(
-                        self._post_reconciled_med(
-                            patient_id, med, administer_date, semaphore, auth_medication_override=full_auth
-                        )
-                    )
+                    tasks.append(self._post_reconciled_med(patient_id, med, administer_date, semaphore))
 
         _TASK_WARN_THRESHOLD = 200
         if len(tasks) > _TASK_WARN_THRESHOLD:
