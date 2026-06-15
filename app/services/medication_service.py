@@ -117,6 +117,7 @@ class MedicationService:
             async with semaphore:
                 resp = await self._api.post_cdt(patient_id, body, "cdt-client-medication-list")
             resp.raise_for_status()
+            logger.debug(f"[cdt-client-medication-list] posted {source}: status={resp.status_code} body={json.dumps(body)}")
             return {"ok": {"source": source, "status": resp.status_code}}
         except (httpx.HTTPError, HTTPException) as exc:
             msg = self._exc_message(exc)
@@ -132,11 +133,12 @@ class MedicationService:
         Each medication is written exactly once — no frequency multiplication.
         """
         semaphore = asyncio.Semaphore(self._MAX_CONCURRENCY)
-        tasks = [
-            self._post_one_client_med(patient_id, i, med, semaphore)
-            for i, med in enumerate(meds)
-            if med.auth_medication is not None
-        ]
+        tasks = []
+        for i, med in enumerate(meds):
+            if med.auth_medication is None:
+                logger.debug(f"[cdt-client-medication-list] skipping med index={i}: auth_medication is None")
+                continue
+            tasks.append(self._post_one_client_med(patient_id, i, med, semaphore))
         results = await asyncio.gather(*tasks)
         created = [r["ok"] for r in results if "ok" in r]
         errors = [r["err"] for r in results if "err" in r]
