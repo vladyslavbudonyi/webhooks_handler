@@ -21,7 +21,7 @@ class CdtClientMedicationListPayload(BaseModel):
     route: Optional[str] = Field(None, alias="cdtf-route")
     route_other: Optional[str] = Field(None, alias="cdtf-route-other")
     frequency_selector: Optional[str] = Field(None, alias="cdtf-med-frequency-selector")
-    frequency_other: Optional[str] = Field(None, alias="cdtf-med-frequency-other")
+    frequency_other: Optional[int] = Field(None, alias="cdtf-med-frequency-other")
     total_per_dose: Optional[str] = Field(None, alias="cdtf-total-per-dose")
     parents_comments: Optional[str] = Field(None, alias="cdtf-parents-comments")
     # cdtf-discontinued only accepts "Yes"; omit (None) when the med is active
@@ -42,7 +42,7 @@ class CdtClientMedicationListPayload(BaseModel):
             route=med.route,
             route_other=med.route_other,
             frequency_selector=med.frequency_selector,
-            frequency_other=med.frequency_other,
+            frequency_other=int(med.frequency_other) if med.frequency_other is not None else None,
             total_per_dose=med.total_per_dose,
             parents_comments=med.parents_comments,
             discontinued=discontinued,
