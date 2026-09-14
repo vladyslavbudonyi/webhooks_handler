@@ -18,6 +18,7 @@ class AssessmentMedBody(BaseModel):
     total_per_dose: Optional[str] = Field(None, alias="cdtf-total-per-dose")
     parents_comments: Optional[str] = Field(None, alias="cdtf-parents-comments")
     discontinued: Optional[str] = Field(None, alias="cdtf-discontinued")
+    scheduled_times: Optional[Any] = Field(None, alias="cdtf-scheduled-times")
 
     @field_validator(
         "quantity",
