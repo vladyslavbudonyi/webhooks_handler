@@ -35,6 +35,8 @@ class CdtClientMedicationListPayload(BaseModel):
         # Pass the full auth_medication object unchanged (including pdtf-mf2-tc-gpi_full-gpi_tcgpi-name).
         # cdt-medications/cdtf-auth-medication (pdt-medispan) requires this field when writing,
         # so Script 2 needs the complete reference available when it reads from this CDT.
+        # Preserve a real "Yes" from the assessment; default to "No" otherwise.
+        discontinued = "Yes" if med.discontinued == "Yes" else DISCONTINUED_DEFAULT
         return cls(
             authorized_medication=med.auth_medication,
             quantity=med.quantity,
@@ -45,5 +47,6 @@ class CdtClientMedicationListPayload(BaseModel):
             frequency_other=int(med.frequency_other) if med.frequency_other is not None else None,
             total_per_dose=med.total_per_dose,
             parents_comments=med.parents_comments,
+            discontinued=discontinued,
             scheduled_times=med.scheduled_times,
         )
