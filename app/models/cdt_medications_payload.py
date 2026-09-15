@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.assessment_med_body import AssessmentMedBody
-from app.models.constants import ADDED_BY_PARENT
+from app.models.constants import ADDED_BY_PARENT, RECONCILE_STATUS_NOT_RECONCILED
 
 if TYPE_CHECKING:
     from app.models.client_medication_body import ClientMedicationBody
@@ -30,9 +30,10 @@ class CdtMedicationsPayload(BaseModel):
     total_per_dose: Optional[str] = Field(None, alias="cdtf-total-per-dose")
     parents_comments: Optional[str] = Field(None, alias="cdtf-parents-comments")
     added_by: str = Field(ADDED_BY_PARENT, alias="cdtf-added-by")
-    reconcile_status: str = Field(None, alias="cdtf-med-reconcile-status")
+    reconcile_status: str = Field(RECONCILE_STATUS_NOT_RECONCILED, alias="cdtf-med-reconcile-status")
     physician_signature: Optional[str] = Field(None, alias="cdtf-physician-signature")
     administer_date: Optional[str] = Field(None, alias="cdtf-med-administer-date")
+    scheduled_times: Optional[Any] = Field(None, alias="cdtf-scheduled-times")
 
     @classmethod
     def from_assessment_med(cls, med: AssessmentMedBody) -> "CdtMedicationsPayload":
@@ -55,6 +56,7 @@ class CdtMedicationsPayload(BaseModel):
             total_per_dose=med.total_per_dose,
             parents_comments=med.parents_comments,
             physician_signature=physician_signature,
+            scheduled_times=med.scheduled_times,
         )
 
     @classmethod
@@ -81,4 +83,5 @@ class CdtMedicationsPayload(BaseModel):
             parents_comments=med.parents_comments,
             physician_signature=physician_signature,
             administer_date=administer_date,
+            scheduled_times=med.scheduled_times,
         )
