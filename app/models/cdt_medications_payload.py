@@ -33,6 +33,7 @@ class CdtMedicationsPayload(BaseModel):
     reconcile_status: str = Field(RECONCILE_STATUS_NOT_RECONCILED, alias="cdtf-med-reconcile-status")
     physician_signature: Optional[str] = Field(None, alias="cdtf-physician-signature")
     administer_date: Optional[str] = Field(None, alias="cdtf-med-administer-date")
+    admin_date_time: Optional[str] = Field(None, alias="cdtf-med-admin-date-time")
     scheduled_times: Optional[Any] = Field(None, alias="cdtf-scheduled-times")
 
     @classmethod
@@ -83,5 +84,6 @@ class CdtMedicationsPayload(BaseModel):
             parents_comments=med.parents_comments,
             physician_signature=physician_signature,
             administer_date=administer_date,
+            admin_date_time=administer_date,
             scheduled_times=med.scheduled_times,
         )
