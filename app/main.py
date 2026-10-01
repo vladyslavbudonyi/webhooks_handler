@@ -79,20 +79,21 @@ async def receive_webhook_reconciliation(
             detail=f"Tenant mismatch: got '{payload.tenantName}', expected '{settings.API_TENANT}'",
         )
 
-    # Fetch the specific cdt-my-stays record from the URL embedded in the webhook
-    stays = await med_service.fetch_stays_record(payload.url)
+    # Fetch the specific cdt-weekend-schedule record from the URL embedded in the webhook
+    schedule = await med_service.fetch_stays_record(payload.url)
 
-    if stays.med_list_received != "Yes":
+    if schedule.schedule_meds != "Yes":
         logger.info(
             f"[webhook_reconciliation] skipping patientId={payload.patientId}: "
-            f"cdtf-med-list-received='{stays.med_list_received}'"
+            f"cdtf-schedule-meds='{schedule.schedule_meds}'"
         )
-        return {"status": "skipped", "reason": "cdtf-med-list-received is not Yes"}
+        return {"status": "skipped", "reason": "cdtf-schedule-meds is not Yes"}
 
-    if not stays.start_date or not stays.end_date:
+    # End date is only needed as a fallback when cdtf-length-of-stay is invalid (handled in the service)
+    if not schedule.start_date:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="cdt-my-stays record is missing cdtf-start-date or cdtf-end-date",
+            detail="cdt-weekend-schedule record is missing cdtf-start-of-scheduled-stay-date",
         )
 
     meds = await med_service.fetch_client_medications(payload.patientId)
@@ -105,6 +106,6 @@ async def receive_webhook_reconciliation(
             "errors": [],
         }
 
-    created, errors = await med_service.create_reconciled_medications(payload.patientId, meds, stays)
+    created, errors = await med_service.create_reconciled_medications(payload.patientId, meds, schedule)
 
     return {"status": "ok", "created": created, "errors": errors}

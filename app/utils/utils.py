@@ -1,11 +1,14 @@
 import datetime
 import logging
-from typing import Tuple
+from typing import Any, Tuple
 from urllib.parse import urlparse
+from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
 
 logger = logging.getLogger(__name__)
+
+EASTERN_TZ = ZoneInfo("America/New_York")
 
 
 def parse_url_components(full_url: str) -> Tuple[str, str, str]:
@@ -52,10 +55,34 @@ def build_description(dosage_per_unit, medication_name, times_per_unit, duration
         return f"{medication_name or 'Medication'} – {duration_int} {duration_unit.lower()}"
 
 
-def iso_midnight_utc(dt: datetime.datetime) -> str:
-    return dt.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=datetime.timezone.utc).strftime(
-        "%Y-%m-%dT%H:%M:%S.000Z"
-    )
+def iso_midnight_eastern(d: datetime.date) -> str:
+    """Return midnight US Eastern (DST-aware) on the given date as a UTC ISO string.
+
+    e.g. 2026-05-20 → "2026-05-20T04:00:00.000Z" (EDT), 2026-12-20 → "2026-12-20T05:00:00.000Z" (EST).
+    """
+    midnight = datetime.datetime.combine(d, datetime.time.min, tzinfo=EASTERN_TZ)
+    return midnight.astimezone(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
+
+def parse_length_of_stay(value: Any) -> int | None:
+    """Parse the cdtf-length-of-stay formula value (int, float or numeric string) to a day count.
+
+    Returns None if the value is missing, non-numeric, non-integral or less than 1.
+    """
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        num = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not num.is_integer() or num < 1:
+        return None
+    return int(num)
+
+
+def stay_dates(start: datetime.date, length: int) -> list[datetime.date]:
+    """Return `length` consecutive dates beginning at start."""
+    return [start + datetime.timedelta(days=i) for i in range(length)]
 
 
 def parse_welkin_date(s: str | None) -> datetime.date:

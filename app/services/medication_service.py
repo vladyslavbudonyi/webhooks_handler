@@ -12,9 +12,15 @@ from app.models.cdt_client_medication_list_payload import CdtClientMedicationLis
 from app.models.cdt_list_response import CdtListResponse, CdtRecord
 from app.models.cdt_medications_payload import CdtMedicationsPayload
 from app.models.client_medication_body import ClientMedicationBody
-from app.models.my_stays_body import MyStaysBody
+from app.models.weekend_schedule_body import WeekendScheduleBody
 from app.services.api_service import ApiService
-from app.utils.utils import date_range, iso_midnight_utc, parse_welkin_date
+from app.utils.utils import (
+    date_range,
+    iso_midnight_eastern,
+    parse_length_of_stay,
+    parse_welkin_date,
+    stay_dates,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +31,7 @@ class MedicationService:
     Responsible for:
     - Fetching medications filled by parents in the assessment (cdt-med-1..20).
     - Script 1: writing each medication once to cdt-client-medication-list.
-    - Script 2: reading stay dates + meds, writing dated dose records to cdt-medications.
+    - Script 2: reading the cdt-weekend-schedule stay + meds, writing dated dose records to cdt-medications.
 
     Single Responsibility: this class contains no HTTP or framework details;
     all network calls are delegated to ApiService.
@@ -42,6 +48,9 @@ class MedicationService:
     }
 
     _MAX_FREQUENCY_COUNT = 100
+
+    # Upper bound on cdtf-length-of-stay — guards against a bad formula value creating thousands of records.
+    _MAX_STAY_DAYS = 60
 
     @classmethod
     def _frequency_count(cls, frequency_selector: Optional[str], frequency_other: Optional[str]) -> int:
@@ -147,15 +156,15 @@ class MedicationService:
     # Script 2 — reconciliation: read stay + meds, write dated dose records
     # -------------------------------------------------------------------------
 
-    async def fetch_stays_record(self, stays_url: str) -> MyStaysBody:
-        """GET the cdt-my-stays record directly by its URL (from webhook payload.url).
+    async def fetch_stays_record(self, stays_url: str) -> WeekendScheduleBody:
+        """GET the cdt-weekend-schedule record directly by its URL (from webhook payload.url).
 
-        The webhook URL points to the single-record endpoint (.../cdts/cdt-my-stays/{id}),
+        The webhook URL points to the single-record endpoint (.../cdts/cdt-weekend-schedule/{id}),
         which returns a bare CdtRecord (not a paginated list).
         """
         resp = await self._api.get_resource(stays_url)
         record = CdtRecord.model_validate(resp.json())
-        return MyStaysBody.model_validate(record.jsonBody)
+        return WeekendScheduleBody.model_validate(record.jsonBody)
 
     async def fetch_client_medications(self, patient_id: str) -> list[ClientMedicationBody]:
         """GET all cdt-client-medication-list records for the patient (no sourceId filter).
@@ -174,45 +183,87 @@ class MedicationService:
         self,
         patient_id: str,
         med: ClientMedicationBody,
-        administer_date: str,
+        admin_date_time: str,
         semaphore: asyncio.Semaphore,
     ) -> dict:
-        payload = CdtMedicationsPayload.from_client_medication(med, administer_date)
+        payload = CdtMedicationsPayload.from_client_medication(med, admin_date_time)
         body = payload.model_dump(by_alias=True, exclude_none=True)
         try:
             async with semaphore:
                 resp = await self._api.post_cdt(patient_id, body, "cdt-medications")
             resp.raise_for_status()
-            return {"ok": {"date": administer_date, "status": resp.status_code}}
+            return {"ok": {"date": admin_date_time, "status": resp.status_code}}
         except (httpx.HTTPError, HTTPException) as exc:
             msg = self._exc_message(exc)
-            logger.error(f"[cdt-medications] reconciliation failed date={administer_date}: {msg}")
-            return {"err": {"date": administer_date, "error": msg}}
+            logger.error(f"[cdt-medications] reconciliation failed date={admin_date_time}: {msg}")
+            return {"err": {"date": admin_date_time, "error": msg}}
+
+    def _resolve_stay_dates(self, schedule: WeekendScheduleBody) -> list[datetime.date]:
+        """Return the dates to write dose records for.
+
+        Driven by cdtf-length-of-stay starting at the scheduled start date. Falls back to the
+        start→end date range (inclusive) when length-of-stay is missing or invalid.
+        """
+        try:
+            start = parse_welkin_date(schedule.start_date)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+        length = parse_length_of_stay(schedule.length_of_stay)
+
+        if length is None:
+            logger.warning(
+                f"[reconciliation] invalid cdtf-length-of-stay={schedule.length_of_stay!r}; "
+                f"falling back to start→end date range"
+            )
+            try:
+                end = parse_welkin_date(schedule.end_date)
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"cdtf-length-of-stay is invalid and end date cannot be used: {exc}",
+                )
+            return date_range(start, end)
+
+        if length > self._MAX_STAY_DAYS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"cdtf-length-of-stay={length} exceeds the maximum of {self._MAX_STAY_DAYS} days",
+            )
+
+        if schedule.end_date:
+            try:
+                end = parse_welkin_date(schedule.end_date)
+                if (end - start).days + 1 != length:
+                    logger.warning(
+                        f"[reconciliation] cdtf-length-of-stay={length} does not match "
+                        f"{schedule.start_date} → {schedule.end_date}; using length-of-stay"
+                    )
+            except ValueError:
+                logger.warning(f"[reconciliation] unparseable end date {schedule.end_date!r}; using length-of-stay")
+
+        return stay_dates(start, length)
 
     async def create_reconciled_medications(
         self,
         patient_id: str,
         meds: list[ClientMedicationBody],
-        stays: MyStaysBody,
+        schedule: WeekendScheduleBody,
     ) -> tuple[list[dict], list[dict]]:
         """Script 2 core: POST one cdt-medications record per medication × dose × day.
 
-        For each medication, for each date in [start_date..end_date], posts
-        frequency-count copies with cdtf-med-administer-date set to that date.
+        Days = cdtf-length-of-stay, starting at the scheduled start date. For each medication,
+        for each day, posts frequency-count copies with cdtf-med-admin-date-time set to that
+        date at midnight US Eastern.
 
-        Example: Tylenol 2×/day, stay May 20–21 → 4 records total.
+        Example: Tylenol 2×/day, stay May 20–21 (length 2) → 4 records total,
+        2 at 05/20/2026 00:00 ET and 2 at 05/21/2026 00:00 ET.
         """
-        try:
-            start = parse_welkin_date(stays.start_date)
-            end = parse_welkin_date(stays.end_date)
-        except ValueError as exc:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
-
-        dates = date_range(start, end)
+        dates = self._resolve_stay_dates(schedule)
 
         logger.info(
-            f"[reconciliation] stay {stays.start_date} → {stays.end_date} "
-            f"({len(dates)} day(s)), {len(meds)} medication(s)"
+            f"[reconciliation] stay {schedule.start_date} → {schedule.end_date} "
+            f"length={schedule.length_of_stay} ({len(dates)} day(s)), {len(meds)} medication(s)"
         )
 
         semaphore = asyncio.Semaphore(self._MAX_CONCURRENCY)
@@ -222,9 +273,9 @@ class MedicationService:
                 continue
             freq = self._frequency_count(med.frequency_selector, med.frequency_other)
             for date in dates:
-                administer_date = iso_midnight_utc(datetime.datetime.combine(date, datetime.time.min))
+                admin_date_time = iso_midnight_eastern(date)
                 for _ in range(freq):
-                    tasks.append(self._post_reconciled_med(patient_id, med, administer_date, semaphore))
+                    tasks.append(self._post_reconciled_med(patient_id, med, admin_date_time, semaphore))
 
         _TASK_WARN_THRESHOLD = 200
         if len(tasks) > _TASK_WARN_THRESHOLD:

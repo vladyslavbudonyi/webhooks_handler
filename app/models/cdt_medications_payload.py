@@ -31,6 +31,7 @@ class CdtMedicationsPayload(BaseModel):
     parents_comments: Optional[str] = Field(None, alias="cdtf-parents-comments")
     added_by: str = Field(ADDED_BY_PARENT, alias="cdtf-added-by")
     reconcile_status: str = Field(RECONCILE_STATUS_NOT_RECONCILED, alias="cdtf-med-reconcile-status")
+    reconciled: str = Field(RECONCILE_STATUS_NOT_RECONCILED, alias="cdtf-reconciled")
     physician_signature: Optional[str] = Field(None, alias="cdtf-physician-signature")
     administer_date: Optional[str] = Field(None, alias="cdtf-med-administer-date")
     admin_date_time: Optional[str] = Field(None, alias="cdtf-med-admin-date-time")
@@ -64,12 +65,14 @@ class CdtMedicationsPayload(BaseModel):
     def from_client_medication(
         cls,
         med: ClientMedicationBody,
-        administer_date: str,
+        admin_date_time: str,
     ) -> "CdtMedicationsPayload":
         """Build a cdt-medications payload from a cdt-client-medication-list record (Script 2).
 
         Called once per dose per day during reconciliation.
-        administer_date: ISO datetime string, e.g. "2026-05-30T00:00:00.000Z"
+        admin_date_time: ISO datetime string for the dose date at midnight US Eastern,
+            e.g. "2026-05-30T04:00:00.000Z". Written to both cdtf-med-admin-date-time
+            and the legacy cdtf-med-administer-date.
         """
         physician_signature = None if med.discontinued == "Yes" else "Yes"
         return cls(
@@ -83,7 +86,7 @@ class CdtMedicationsPayload(BaseModel):
             total_per_dose=med.total_per_dose,
             parents_comments=med.parents_comments,
             physician_signature=physician_signature,
-            administer_date=administer_date,
-            admin_date_time=administer_date,
+            administer_date=admin_date_time,
+            admin_date_time=admin_date_time,
             scheduled_times=med.scheduled_times,
         )
