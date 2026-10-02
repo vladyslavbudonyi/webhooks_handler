@@ -55,6 +55,12 @@ def build_description(dosage_per_unit, medication_name, times_per_unit, duration
         return f"{medication_name or 'Medication'} – {duration_int} {duration_unit.lower()}"
 
 
+def iso_midnight_utc(dt: datetime.datetime) -> str:
+    return dt.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=datetime.timezone.utc).strftime(
+        "%Y-%m-%dT%H:%M:%S.000Z"
+    )
+
+
 def iso_midnight_eastern(d: datetime.date) -> str:
     """Return midnight US Eastern (DST-aware) on the given date as a UTC ISO string.
 

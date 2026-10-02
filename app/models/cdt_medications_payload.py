@@ -65,14 +65,16 @@ class CdtMedicationsPayload(BaseModel):
     def from_client_medication(
         cls,
         med: ClientMedicationBody,
+        administer_date: str,
         admin_date_time: str,
     ) -> "CdtMedicationsPayload":
         """Build a cdt-medications payload from a cdt-client-medication-list record (Script 2).
 
         Called once per dose per day during reconciliation.
-        admin_date_time: ISO datetime string for the dose date at midnight US Eastern,
-            e.g. "2026-05-30T04:00:00.000Z". Written to both cdtf-med-admin-date-time
-            and the legacy cdtf-med-administer-date.
+        administer_date: dose date at midnight UTC, e.g. "2026-05-30T00:00:00.000Z".
+            cdtf-med-administer-date is a Welkin DATE field and rejects non-midnight-UTC times.
+        admin_date_time: dose date at midnight US Eastern, e.g. "2026-05-30T04:00:00.000Z"
+            (cdtf-med-admin-date-time, a datetime field).
         """
         physician_signature = None if med.discontinued == "Yes" else "Yes"
         return cls(
@@ -86,7 +88,7 @@ class CdtMedicationsPayload(BaseModel):
             total_per_dose=med.total_per_dose,
             parents_comments=med.parents_comments,
             physician_signature=physician_signature,
-            administer_date=admin_date_time,
+            administer_date=administer_date,
             admin_date_time=admin_date_time,
             scheduled_times=med.scheduled_times,
         )

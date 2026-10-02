@@ -17,6 +17,7 @@ from app.services.api_service import ApiService
 from app.utils.utils import (
     date_range,
     iso_midnight_eastern,
+    iso_midnight_utc,
     parse_length_of_stay,
     parse_welkin_date,
     stay_dates,
@@ -183,10 +184,11 @@ class MedicationService:
         self,
         patient_id: str,
         med: ClientMedicationBody,
+        administer_date: str,
         admin_date_time: str,
         semaphore: asyncio.Semaphore,
     ) -> dict:
-        payload = CdtMedicationsPayload.from_client_medication(med, admin_date_time)
+        payload = CdtMedicationsPayload.from_client_medication(med, administer_date, admin_date_time)
         body = payload.model_dump(by_alias=True, exclude_none=True)
         try:
             async with semaphore:
@@ -273,9 +275,12 @@ class MedicationService:
                 continue
             freq = self._frequency_count(med.frequency_selector, med.frequency_other)
             for date in dates:
+                administer_date = iso_midnight_utc(datetime.datetime.combine(date, datetime.time.min))
                 admin_date_time = iso_midnight_eastern(date)
                 for _ in range(freq):
-                    tasks.append(self._post_reconciled_med(patient_id, med, admin_date_time, semaphore))
+                    tasks.append(
+                        self._post_reconciled_med(patient_id, med, administer_date, admin_date_time, semaphore)
+                    )
 
         _TASK_WARN_THRESHOLD = 200
         if len(tasks) > _TASK_WARN_THRESHOLD:
