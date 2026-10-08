@@ -73,7 +73,7 @@ class CdtMedicationsPayload(BaseModel):
         Called once per dose per day during reconciliation.
         administer_date: dose date at midnight UTC, e.g. "2026-05-30T00:00:00.000Z".
             cdtf-med-administer-date is a Welkin DATE field and rejects non-midnight-UTC times.
-        admin_date_time: dose date at midnight US Eastern, e.g. "2026-05-30T04:00:00.000Z"
+        admin_date_time: dose date at midnight US Pacific, e.g. "2026-05-30T07:00:00.000Z"
             (cdtf-med-admin-date-time, a datetime field).
         """
         physician_signature = None if med.discontinued == "Yes" else "Yes"

@@ -16,7 +16,7 @@ from app.models.weekend_schedule_body import WeekendScheduleBody
 from app.services.api_service import ApiService
 from app.utils.utils import (
     date_range,
-    iso_midnight_eastern,
+    iso_midnight_pacific,
     iso_midnight_utc,
     parse_length_of_stay,
     parse_welkin_date,
@@ -256,10 +256,10 @@ class MedicationService:
 
         Days = cdtf-length-of-stay, starting at the scheduled start date. For each medication,
         for each day, posts frequency-count copies with cdtf-med-admin-date-time set to that
-        date at midnight US Eastern.
+        date at midnight US Pacific.
 
         Example: Tylenol 2×/day, stay May 20–21 (length 2) → 4 records total,
-        2 at 05/20/2026 00:00 ET and 2 at 05/21/2026 00:00 ET.
+        2 at 05/20/2026 00:00 PT and 2 at 05/21/2026 00:00 PT.
         """
         dates = self._resolve_stay_dates(schedule)
 
@@ -276,7 +276,7 @@ class MedicationService:
             freq = self._frequency_count(med.frequency_selector, med.frequency_other)
             for date in dates:
                 administer_date = iso_midnight_utc(datetime.datetime.combine(date, datetime.time.min))
-                admin_date_time = iso_midnight_eastern(date)
+                admin_date_time = iso_midnight_pacific(date)
                 for _ in range(freq):
                     tasks.append(
                         self._post_reconciled_med(patient_id, med, administer_date, admin_date_time, semaphore)

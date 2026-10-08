@@ -8,7 +8,7 @@ from fastapi import HTTPException, status
 
 logger = logging.getLogger(__name__)
 
-EASTERN_TZ = ZoneInfo("America/New_York")
+PACIFIC_TZ = ZoneInfo("America/Los_Angeles")
 
 
 def parse_url_components(full_url: str) -> Tuple[str, str, str]:
@@ -61,12 +61,12 @@ def iso_midnight_utc(dt: datetime.datetime) -> str:
     )
 
 
-def iso_midnight_eastern(d: datetime.date) -> str:
-    """Return midnight US Eastern (DST-aware) on the given date as a UTC ISO string.
+def iso_midnight_pacific(d: datetime.date) -> str:
+    """Return midnight US Pacific (DST-aware) on the given date as a UTC ISO string.
 
-    e.g. 2026-05-20 → "2026-05-20T04:00:00.000Z" (EDT), 2026-12-20 → "2026-12-20T05:00:00.000Z" (EST).
+    e.g. 2026-05-20 → "2026-05-20T07:00:00.000Z" (PDT), 2026-12-20 → "2026-12-20T08:00:00.000Z" (PST).
     """
-    midnight = datetime.datetime.combine(d, datetime.time.min, tzinfo=EASTERN_TZ)
+    midnight = datetime.datetime.combine(d, datetime.time.min, tzinfo=PACIFIC_TZ)
     return midnight.astimezone(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
 
