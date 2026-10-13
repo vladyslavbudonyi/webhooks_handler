@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.assessment_med_body import AssessmentMedBody
 from app.models.constants import ADDED_BY_PARENT, RECONCILE_STATUS_NOT_RECONCILED
+from app.utils.utils import format_scheduled_times
 
 if TYPE_CHECKING:
     from app.models.client_medication_body import ClientMedicationBody
@@ -35,7 +36,9 @@ class CdtMedicationsPayload(BaseModel):
     physician_signature: Optional[str] = Field(None, alias="cdtf-physician-signature")
     administer_date: Optional[str] = Field(None, alias="cdtf-med-administer-date")
     admin_date_time: Optional[str] = Field(None, alias="cdtf-med-admin-date-time")
-    scheduled_times: Optional[Any] = Field(None, alias="cdtf-scheduled-times")
+    # Textarea on cdt-medications: list values from the source CDT are joined with commas.
+    scheduled_times: Optional[str] = Field(None, alias="cdtf-scheduled-times")
+    med_count_req: Optional[str] = Field(None, alias="cdtf-med-count-req")
 
     @classmethod
     def from_assessment_med(cls, med: AssessmentMedBody) -> "CdtMedicationsPayload":
@@ -58,7 +61,7 @@ class CdtMedicationsPayload(BaseModel):
             total_per_dose=med.total_per_dose,
             parents_comments=med.parents_comments,
             physician_signature=physician_signature,
-            scheduled_times=med.scheduled_times,
+            scheduled_times=format_scheduled_times(med.scheduled_times),
         )
 
     @classmethod
@@ -75,6 +78,8 @@ class CdtMedicationsPayload(BaseModel):
             cdtf-med-administer-date is a Welkin DATE field and rejects non-midnight-UTC times.
         admin_date_time: dose date at midnight US Pacific, e.g. "2026-05-30T07:00:00.000Z"
             (cdtf-med-admin-date-time, a datetime field).
+        cdtf-med-count-req (Yes/No list) is copied as-is; cdtf-scheduled-times (list of times)
+        is written as a comma-separated string because the target field is a textarea.
         """
         physician_signature = None if med.discontinued == "Yes" else "Yes"
         return cls(
@@ -90,5 +95,6 @@ class CdtMedicationsPayload(BaseModel):
             physician_signature=physician_signature,
             administer_date=administer_date,
             admin_date_time=admin_date_time,
-            scheduled_times=med.scheduled_times,
+            scheduled_times=format_scheduled_times(med.scheduled_times),
+            med_count_req=med.med_count_req,
         )

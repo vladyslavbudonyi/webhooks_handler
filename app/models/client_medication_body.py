@@ -22,3 +22,4 @@ class ClientMedicationBody(BaseModel):
     parents_comments: Optional[str] = Field(None, alias="cdtf-parents-comments")
     discontinued: Optional[str] = Field(None, alias="cdtf-discontinued")
     scheduled_times: Optional[Any] = Field(None, alias="cdtf-scheduled-times")
+    med_count_req: Optional[str] = Field(None, alias="cdtf-med-count-req")

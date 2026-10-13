@@ -115,3 +115,20 @@ def date_range(start: datetime.date, end: datetime.date) -> list[datetime.date]:
         return [start]
     days = (end - start).days + 1
     return [start + datetime.timedelta(days=i) for i in range(days)]
+
+
+def format_scheduled_times(value: Any) -> str | None:
+    """Format a cdtf-scheduled-times list value as a comma-separated string for a textarea field.
+
+    e.g. ["08:00", "20:00"] → "08:00, 20:00". Returns None for missing/empty values so the
+    field is omitted from the payload.
+    """
+    if value is None:
+        return None
+    if isinstance(value, list):
+        items = [str(v).strip() for v in value if v is not None and str(v).strip()]
+        return ", ".join(items) or None
+    if isinstance(value, str):
+        return value.strip() or None
+    logger.debug("format_scheduled_times: unexpected type %s; coercing to str", type(value).__name__)
+    return str(value)
