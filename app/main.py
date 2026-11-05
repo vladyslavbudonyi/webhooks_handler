@@ -6,6 +6,7 @@ from fastapi import FastAPI, HTTPException, Body, Depends, status
 from app.config import settings
 from app.models import WebhookPayload
 from app.services import medication_service_client
+from app.services.api_service import is_allowed_api_url
 from app.services.medication_service import MedicationService
 
 
@@ -77,6 +78,15 @@ async def receive_webhook_reconciliation(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Tenant mismatch: got '{payload.tenantName}', expected '{settings.API_TENANT}'",
+        )
+
+    # payload.url comes from the (unauthenticated) request body and is fetched with the API token,
+    # so only allow the configured Welkin API host/tenant/instance.
+    if not is_allowed_api_url(payload.url):
+        logger.warning("[webhook_reconciliation] rejected payload.url: not an allowed Welkin API URL")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="url is not an allowed Welkin API URL",
         )
 
     # Fetch the specific cdt-weekend-schedule record from the URL embedded in the webhook

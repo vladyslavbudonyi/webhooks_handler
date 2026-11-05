@@ -1,8 +1,37 @@
+from urllib.parse import unquote, urlsplit
+
 import httpx
 from fastapi import HTTPException, status
 
 from app.config import settings
 from app.services.token_service import TokenService
+
+
+def is_allowed_api_url(url: str) -> bool:
+    """True only for https URLs on the configured Welkin API host under /{tenant}/{instance}/.
+
+    The Welkin API token is attached to every request made with such a URL, so anything
+    that could send it elsewhere (other host/scheme/port, userinfo, path traversal) is rejected.
+    """
+    base = urlsplit(settings.API_URL)
+    if base.scheme != "https" or not base.hostname or not settings.API_TENANT or not settings.API_INSTANCE:
+        return False
+    if any(c.isspace() for c in url) or "\\" in url:
+        return False
+    try:
+        parts = urlsplit(url)
+        port = parts.port
+    except ValueError:
+        return False
+    if parts.scheme != "https" or parts.username is not None or parts.password is not None:
+        return False
+    if (parts.hostname or "").lower() != base.hostname.lower() or port not in (None, 443):
+        return False
+    if not parts.path.startswith(f"/{settings.API_TENANT}/{settings.API_INSTANCE}/"):
+        return False
+    if any(seg in (".", "..") for seg in unquote(parts.path).split("/")):
+        return False
+    return True
 
 
 class ApiService:
@@ -42,6 +71,12 @@ class ApiService:
         return resp
 
     async def get_resource(self, resource_url: str) -> httpx.Response:
+        # Defense in depth: never attach the API token to a request outside the Welkin API.
+        if not is_allowed_api_url(resource_url):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Resource URL is not an allowed Welkin API URL",
+            )
         token = await self._token_service.get_token()
         headers = {
             "Accept": "application/json",
