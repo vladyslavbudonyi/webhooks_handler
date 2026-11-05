@@ -157,14 +157,20 @@ class MedicationService:
     # Script 2 — reconciliation: read stay + meds, write dated dose records
     # -------------------------------------------------------------------------
 
-    async def fetch_stays_record(self, stays_url: str) -> WeekendScheduleBody:
+    async def fetch_stays_record(self, stays_url: str, patient_id: str) -> Optional[WeekendScheduleBody]:
         """GET the cdt-weekend-schedule record directly by its URL (from webhook payload.url).
 
         The webhook URL points to the single-record endpoint (.../cdts/cdt-weekend-schedule/{id}),
         which returns a bare CdtRecord (not a paginated list).
+
+        Returns None if the record belongs to a different patient than patient_id, so one
+        patient's schedule is never applied to another patient's medications.
         """
         resp = await self._api.get_resource(stays_url)
         record = CdtRecord.model_validate(resp.json())
+        if record.patientId != patient_id:
+            logger.warning("[cdt-weekend-schedule] record patientId does not match webhook patientId")
+            return None
         return WeekendScheduleBody.model_validate(record.jsonBody)
 
     async def fetch_client_medications(self, patient_id: str) -> list[ClientMedicationBody]:
