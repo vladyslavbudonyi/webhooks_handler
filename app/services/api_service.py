@@ -1,5 +1,3 @@
-from urllib.parse import unquote, urlsplit
-
 import httpx
 from fastapi import HTTPException, status
 
@@ -8,30 +6,12 @@ from app.services.token_service import TokenService
 
 
 def is_allowed_api_url(url: str) -> bool:
-    """True only for https URLs on the configured Welkin API host under /{tenant}/{instance}/.
+    """The API token is sent with this URL, so it must point at our Welkin API tenant/instance.
 
-    The Welkin API token is attached to every request made with such a URL, so anything
-    that could send it elsewhere (other host/scheme/port, userinfo, path traversal) is rejected.
+    startswith (not `in`) with the trailing "/" so that e.g. "https://evil.com/?x=<API_URL>",
+    "<API_URL>.evil.com" or "<API_URL>@evil.com" are rejected.
     """
-    base = urlsplit(settings.API_URL)
-    if base.scheme != "https" or not base.hostname or not settings.API_TENANT or not settings.API_INSTANCE:
-        return False
-    if any(c.isspace() for c in url) or "\\" in url:
-        return False
-    try:
-        parts = urlsplit(url)
-        port = parts.port
-    except ValueError:
-        return False
-    if parts.scheme != "https" or parts.username is not None or parts.password is not None:
-        return False
-    if (parts.hostname or "").lower() != base.hostname.lower() or port not in (None, 443):
-        return False
-    if not parts.path.startswith(f"/{settings.API_TENANT}/{settings.API_INSTANCE}/"):
-        return False
-    if any(seg in (".", "..") for seg in unquote(parts.path).split("/")):
-        return False
-    return True
+    return bool(settings.API_URL) and url.startswith(f"{settings.API_URL}/{settings.API_TENANT}/{settings.API_INSTANCE}/")
 
 
 class ApiService:

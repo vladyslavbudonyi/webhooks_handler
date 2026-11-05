@@ -80,14 +80,10 @@ async def receive_webhook_reconciliation(
             detail=f"Tenant mismatch: got '{payload.tenantName}', expected '{settings.API_TENANT}'",
         )
 
-    # payload.url comes from the (unauthenticated) request body and is fetched with the API token,
-    # so only allow the configured Welkin API host/tenant/instance.
+    # payload.url is fetched with the API token, so only follow it to our Welkin API.
     if not is_allowed_api_url(payload.url):
-        logger.warning("[webhook_reconciliation] rejected payload.url: not an allowed Welkin API URL")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="url is not an allowed Welkin API URL",
-        )
+        logger.warning("[webhook_reconciliation] skipping: payload.url is not a Welkin API URL")
+        return {"status": "skipped", "reason": "url is not a Welkin API URL"}
 
     # Fetch the specific cdt-weekend-schedule record from the URL embedded in the webhook
     schedule = await med_service.fetch_stays_record(payload.url)
