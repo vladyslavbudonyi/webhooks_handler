@@ -15,6 +15,7 @@ from app.config import settings
 from app.main import app
 from app.services import medication_service_client
 from app.services.api_service import ApiService, is_allowed_api_url
+from app.services.medication_service import MedicationService
 
 API_URL = "https://api.live.welkincloud.io"
 TENANT = "jh"
@@ -68,6 +69,13 @@ BLOCKED = {
     "prefix_without_trailing_slash": PREFIX,
     "root": f"{API_URL}/",
     "bare_api_url": API_URL,
+    # dot segments: httpx/the server resolve these, escaping the tenant/instance prefix
+    "dot_dot_to_other_tenant": f"{PREFIX}/../../other/live/x",
+    "dot_dot_to_admin": f"{PREFIX}/../admin/api_clients/x",
+    "dot_dot_trailing": f"{PREFIX}/..",
+    "encoded_dot_dot": f"{PREFIX}/%2e%2e/%2e%2e/other/x",
+    "encoded_dot_dot_upper": f"{PREFIX}/%2E%2E/x",
+    "mixed_encoded_dot_dot": f"{PREFIX}/.%2e/x",
     # formatting tricks
     "leading_space": f" {GOOD_URL}",
     "leading_newline": f"\n{GOOD_URL}",
@@ -85,6 +93,22 @@ def test_allows_welkin_tenant_urls(url):
 @pytest.mark.parametrize("url", BLOCKED.values(), ids=BLOCKED.keys())
 def test_blocks_risky_urls(url):
     assert not is_allowed_api_url(url)
+
+
+def test_dots_inside_a_segment_are_fine():
+    assert is_allowed_api_url(f"{PREFIX}/patients/abc/cdts/cdt.v2..x/1")
+
+
+def test_api_url_with_trailing_slash_still_allows_webhook_urls(monkeypatch):
+    monkeypatch.setattr(settings, "API_URL", f"{API_URL}/")
+    assert is_allowed_api_url(GOOD_URL)
+    assert not is_allowed_api_url(f"{API_URL}//{TENANT}/{INSTANCE}/x")
+
+
+def test_http_api_url_is_never_allowed(monkeypatch):
+    """A misconfigured http:// API_URL must not make us send the token over plaintext."""
+    monkeypatch.setattr(settings, "API_URL", "http://api.live.welkincloud.io")
+    assert not is_allowed_api_url(f"http://api.live.welkincloud.io/{TENANT}/{INSTANCE}/x")
 
 
 @pytest.mark.parametrize("field", ["API_URL", "API_TENANT", "API_INSTANCE"])
@@ -146,7 +170,7 @@ class _FakeMedicationService:
     def __init__(self):
         self.fetched: list[str] = []
 
-    async def fetch_stays_record(self, url: str):
+    async def fetch_stays_record(self, url: str, patient_id: str):
         self.fetched.append(url)
         raise AssertionError("should not be reached in these tests")
 
@@ -198,3 +222,48 @@ def test_reconciliation_fetches_welkin_url(client_and_service):
         client.post("/webhook_reconciliation", json=_payload(GOOD_URL))
 
     assert service.fetched == [GOOD_URL]
+
+
+# --- schedule record must belong to the webhook's patient ---------------------------------------
+
+
+def _stays_service(record_patient_id: str) -> MedicationService:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "id": "22222222",
+                "patientId": record_patient_id,
+                "cdtId": "cdt",
+                "version": 1,
+                "jsonBody": {},
+                "cdtName": "cdt-weekend-schedule",
+            },
+        )
+
+    api = ApiService(httpx.AsyncClient(transport=httpx.MockTransport(handler)), _FakeTokenService())
+    return MedicationService(api)
+
+
+def test_fetch_stays_record_rejects_other_patients_record():
+    service = _stays_service(record_patient_id="other-patient")
+    assert asyncio.run(service.fetch_stays_record(GOOD_URL, "patient")) is None
+
+
+def test_fetch_stays_record_returns_matching_patients_record():
+    service = _stays_service(record_patient_id="patient")
+    assert asyncio.run(service.fetch_stays_record(GOOD_URL, "patient")) is not None
+
+
+def test_reconciliation_skips_when_schedule_is_for_other_patient():
+    app.dependency_overrides[medication_service_client] = lambda: _stays_service(record_patient_id="other-patient")
+    try:
+        resp = TestClient(app).post("/webhook_reconciliation", json=_payload(GOOD_URL))
+    finally:
+        app.dependency_overrides.clear()
+
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "status": "skipped",
+        "reason": "cdt-weekend-schedule record belongs to a different patient",
+    }

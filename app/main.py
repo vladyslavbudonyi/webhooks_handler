@@ -86,7 +86,10 @@ async def receive_webhook_reconciliation(
         return {"status": "skipped", "reason": "url is not a Welkin API URL"}
 
     # Fetch the specific cdt-weekend-schedule record from the URL embedded in the webhook
-    schedule = await med_service.fetch_stays_record(payload.url)
+    schedule = await med_service.fetch_stays_record(payload.url, payload.patientId)
+
+    if schedule is None:
+        return {"status": "skipped", "reason": "cdt-weekend-schedule record belongs to a different patient"}
 
     if schedule.schedule_meds != "Yes":
         logger.info(
