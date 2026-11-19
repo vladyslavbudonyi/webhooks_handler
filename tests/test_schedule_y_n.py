@@ -83,3 +83,78 @@ def test_script2_transfers_only_scheduled_meds():
     assert errors == []
     assert len(created) == 2  # Tylenol, daily, 2 days
     assert {body["cdtf-authorized-medications"]["name"] for _, body in posted} == {"Tylenol"}
+
+
+# --- Webhook end-to-end ---------------------------------------------------------------------------
+
+
+def test_reconciliation_webhook_posts_only_scheduled_meds(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from app.config import settings
+    from app.main import app
+    from app.services import medication_service_client
+
+    api_url, tenant, instance = "https://api.live.welkincloud.io", "jh", "jills-live"
+    monkeypatch.setattr(settings, "API_URL", api_url)
+    monkeypatch.setattr(settings, "API_TENANT", tenant)
+    monkeypatch.setattr(settings, "API_INSTANCE", instance)
+    stays_url = f"{api_url}/{tenant}/{instance}/patients/patient/cdts/cdt-weekend-schedule/stay-1"
+
+    def record(cdt_name: str, body: dict) -> dict:
+        return {"id": "r", "patientId": "patient", "cdtId": "c", "version": 1, "jsonBody": body, "cdtName": cdt_name}
+
+    posted: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if request.method == "POST":
+            posted.append(json.loads(request.content))
+            return httpx.Response(201, json={})
+        if path.endswith("/cdt-weekend-schedule/stay-1"):
+            return httpx.Response(
+                200,
+                json=record(
+                    "cdt-weekend-schedule",
+                    {
+                        "cdtf-schedule-meds": "Yes",
+                        "cdtf-start-of-scheduled-stay-date": "2026-05-20",
+                        "cdtf-length-of-stay": "1",
+                    },
+                ),
+            )
+        if path.endswith("/cdts/cdt-client-medication-list"):
+            meds = [
+                {"cdtf-authorized-medications": {"name": "Tylenol"}, "cdtf-schedule-y-n": "Yes"},
+                {"cdtf-authorized-medications": {"name": "Advil"}, "cdtf-schedule-y-n": "No"},
+                {"cdtf-authorized-medications": {"name": "Zyrtec"}},
+            ]
+            return httpx.Response(
+                200,
+                json={
+                    "name": "cdt-client-medication-list",
+                    "data": {"content": [record("cdt-client-medication-list", m) for m in meds], "empty": False},
+                },
+            )
+        return httpx.Response(404, json={})
+
+    service = MedicationService(
+        ApiService(httpx.AsyncClient(transport=httpx.MockTransport(handler)), _FakeTokenService())
+    )
+    app.dependency_overrides[medication_service_client] = lambda: service
+    try:
+        payload = {
+            k: "x"
+            for k in (
+                "sourceId", "initiatedByObjectType", "initiatedByName", "eventSubtype", "initiatedByObjectId",
+                "eventEntity", "initiatedTime", "initiatedByClientType", "sourceName", "initiatedBy",
+            )
+        }
+        payload.update(instanceName=instance, patientId="patient", url=stays_url, tenantName=tenant)
+        resp = TestClient(app).post("/webhook_reconciliation", json=payload)
+    finally:
+        app.dependency_overrides.clear()
+
+    assert resp.status_code == 200, resp.text
+    assert len(resp.json()["created"]) == 1
+    assert [b["cdtf-authorized-medications"]["name"] for b in posted] == ["Tylenol"]
