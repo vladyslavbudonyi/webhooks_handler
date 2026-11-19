@@ -186,6 +186,15 @@ class MedicationService:
         logger.info(f"[cdt-client-medication-list] fetched {len(meds)} medication(s) for patient {patient_id}")
         return meds
 
+    @staticmethod
+    def scheduled_medications(meds: list[ClientMedicationBody]) -> list[ClientMedicationBody]:
+        """Keep only meds whose current cdtf-schedule-y-n is "Yes" — the only ones Script 2 transfers."""
+        scheduled = [m for m in meds if m.schedule_y_n == "Yes"]
+        skipped = len(meds) - len(scheduled)
+        if skipped:
+            logger.info(f"[cdt-client-medication-list] skipping {skipped} medication(s) with cdtf-schedule-y-n != Yes")
+        return scheduled
+
     async def _post_reconciled_med(
         self,
         patient_id: str,

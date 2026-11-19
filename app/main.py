@@ -115,6 +115,16 @@ async def receive_webhook_reconciliation(
             "errors": [],
         }
 
+    meds = med_service.scheduled_medications(meds)
+
+    if not meds:
+        return {
+            "status": "ok",
+            "message": "No medications with cdtf-schedule-y-n = Yes in cdt-client-medication-list",
+            "created": [],
+            "errors": [],
+        }
+
     created, errors = await med_service.create_reconciled_medications(payload.patientId, meds, schedule)
 
     return {"status": "ok", "created": created, "errors": errors}

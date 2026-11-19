@@ -23,3 +23,5 @@ class ClientMedicationBody(BaseModel):
     discontinued: Optional[str] = Field(None, alias="cdtf-discontinued")
     scheduled_times: Optional[Any] = Field(None, alias="cdtf-scheduled-times")
     med_count_req: Optional[str] = Field(None, alias="cdtf-med-count-req")
+    # Only meds with "Yes" are transferred to cdt-medications by Script 2.
+    schedule_y_n: Optional[str] = Field(None, alias="cdtf-schedule-y-n")
