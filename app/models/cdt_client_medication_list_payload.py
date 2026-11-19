@@ -3,7 +3,13 @@ from typing import Any, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.assessment_med_body import AssessmentMedBody
-from app.models.constants import ADDED_BY_PARENT, DISCONTINUED_DEFAULT, LOW_INVENTORY_DEFAULT, PHYS_SIG_DEFAULT
+from app.models.constants import (
+    ADDED_BY_PARENT,
+    DISCONTINUED_DEFAULT,
+    LOW_INVENTORY_DEFAULT,
+    PHYS_SIG_DEFAULT,
+    SCHEDULE_Y_N_DEFAULT,
+)
 
 
 class CdtClientMedicationListPayload(BaseModel):
@@ -29,6 +35,8 @@ class CdtClientMedicationListPayload(BaseModel):
     phys_sig: str = Field(PHYS_SIG_DEFAULT, alias="cdtf-phys-sig")
     scheduled_times: Optional[Any] = Field(None, alias="cdtf-scheduled-times")
     added_by: str = Field(ADDED_BY_PARENT, alias="cdtf-added-by")
+    # Every med starts as scheduled; Jill's team flips it to "No" to keep it out of Script 2.
+    schedule_y_n: str = Field(SCHEDULE_Y_N_DEFAULT, alias="cdtf-schedule-y-n")
 
     @classmethod
     def from_assessment_med(cls, med: AssessmentMedBody) -> "CdtClientMedicationListPayload":
