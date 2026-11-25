@@ -5,7 +5,7 @@ from typing import Optional
 import httpx
 from fastapi import HTTPException, status
 
-from app.config import settings
+from app.config import refresh_api_secret, settings
 
 logger = logging.getLogger(__name__)
 
@@ -22,12 +22,20 @@ class TokenService:
         self._client = http_client
         self._settings = settings
 
-    async def _fetch_token(self) -> str:
+    async def _request_token(self) -> httpx.Response:
         url = f"{self._settings.API_URL}/{self._settings.API_TENANT}/admin/api_clients/{self._settings.API_CLIENT}"
         headers = {"Content-Type": "application/json"}
         body = {"secret": self._settings.API_SECRET.get_secret_value()}
+        return await self._client.post(url, json=body, headers=headers, timeout=10.0)
 
-        resp = await self._client.post(url, json=body, headers=headers, timeout=10.0)
+    async def _fetch_token(self) -> str:
+        resp = await self._request_token()
+        if resp.status_code in (401, 403):
+            # The secret may have been rotated since this Lambda's cold start: re-read it from
+            # Secrets Manager once and retry. Only happens on auth rejection, not per request.
+            changed = await asyncio.to_thread(refresh_api_secret, self._settings)
+            if changed:
+                resp = await self._request_token()
         try:
             resp.raise_for_status()
         except httpx.HTTPStatusError as exc:
